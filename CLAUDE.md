@@ -1,0 +1,146 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Development Commands
+
+```bash
+# Install in editable mode with all deps
+pip install -e ".[all,dev]"
+
+# Run tests
+pytest tests/ -v
+
+# Run a single test file
+pytest tests/test_e2e_workflow.py -v
+
+# Run a single test
+pytest tests/test_e2e_workflow.py::test_full_workflow -v
+
+# Format and lint
+ruff format antline/ tests/
+ruff check antline/ tests/
+
+# Type check
+mypy antline/
+
+# Run the CLI locally
+python -m antline --help
+antline init
+antline status
+```
+
+## Architecture Overview
+
+**Antline** is a CLI data production management tool. The workflow is:
+
+```
+Source → Requirement → Project → dbt pipeline
+```
+
+### State Management (Git-Native YAML)
+
+All state lives in YAML files under the project root — no database. `ProjectState` (`antline/core/config.py`) is the central abstraction:
+
+- `sources/SRC-001.yml` — `DataSource` configs (db_type, host, port, credentials)
+- `requirements/REQ-001.yml` — `Requirement` configs + assessment
+- `projects/PRJ-001.yml` — `Project` configs + versions
+- `reports/` — Explore reports (`SRC-001_explore.yml`) + assessment materials
+
+`ProjectState` auto-discovers the project root by walking up from `cwd` looking for `antline.yml`. All commands call `state = ProjectState()` to get context.
+
+### CLI Structure
+
+Entry point: `antline/cli.py` (Typer app). Subcommands are in `antline/commands/`:
+
+| Module | Commands |
+|--------|---------|
+| `cli.py` | `init`, `status` |
+| `commands/source.py` | `source add`, `list`, `explore`, `show` |
+| `commands/requirement.py` | `requirement create`, `assess`, `approve`, `list` |
+| `commands/project.py` | `project create`, `scaffold`, `compile`, `build`, `validate`, `deliver` |
+| `commands/schema.py` | `schema import`, `list`, `show` |
+
+Every command module uses `typer.Typer(no_args_is_help=True)` and a module-level `Console()` for output. CLI output is in Chinese where user-facing.
+
+### Data Models
+
+All entities are Pydantic v2 with `ConfigDict(populate_by_name=True)`:
+
+- `DataSource` — connection info + `connection_string()` method
+- `Requirement` — target schemas + `RequirementAssessment` (field mappings, risks)
+- `Project` — requirement IDs + `ProjectVersion` list + QC rules
+- `SourceExploreReport` / `TableMeta` / `ColumnMeta` — metadata reflection output
+
+Models in `antline/core/models.py`.
+
+### Database Layer
+
+`antline/core/db.py` uses SQLAlchemy 2.0 for metadata reflection:
+
+- `get_engine(source)` — builds SQLAlchemy engine from `DataSource`
+- `explore_source(source)` — reflects tables, columns, PKs, row counts, column stats (null rate, unique count, topN), sample data
+
+Sensitive sample data is masked via `antline/core/pii_detector.py` (regex-based Chinese PII detection). Masking can be disabled with `--no-mask`.
+
+### Assessment Workflow
+
+`antline requirement assess REQ-001 SRC-001` generates three files (NOT auto-mapped):
+
+1. `reports/assessment/REQ-001_prompt.md` — LLM prompt with target schema + source metadata
+2. `reports/assessment/REQ-001_guide.md` — human-readable guide
+3. `reports/assessment/REQ-001_template.md` — empty Markdown template with YAML frontmatter
+
+The user (or LLM) fills in the template, saves as `REQ-001_assessment.md`, then runs `antline requirement approve REQ-001` to parse the frontmatter and store `field_mappings` in the requirement.
+
+### Scaffold & dbt Integration
+
+`antline project scaffold PRJ-001` generates a per-project dbt directory: `dbt/PRJ-001/`.
+
+**Row layer source modes** (configurable via `--source-mode`):
+
+- `fdw` (default) — generates `sql/fdw_setup.sql` to create PostgreSQL FDW foreign tables. Row models query foreign schemas named after source databases (e.g. `his_db.patients`).
+- `sync` — row models expect physical tables in `ods_<source_id>` schema (extract job responsibility).
+
+Generated files:
+- `dbt_project.yml` — dbt-safe project name, `+schema: row/map/clean` per directory
+- `profiles.yml` — `env_var('DBT_PASSWORD_PRJ_001')` for password, `.env.prj-001` helper file
+- `models/row/*.sql` — one per used source table (`SELECT * FROM {{ source('SRC-001', 'patients') }}`)
+- `models/map/*.sql` — field mappings from assessment (direct/transform/merge/missing)
+- `models/clean/*.sql` — explicit field list with `-- type nullable: comment` annotations
+
+`scaffold`, `build`, `validate` all operate on `dbt/PRJ-001/`.
+
+### Testing Patterns
+
+Tests use `typer.testing.CliRunner` for CLI invocation and `monkeypatch` to mock the database engine:
+
+```python
+from typer.testing import CliRunner
+from antline.cli import app
+from antline.core import db as db_module
+
+runner = CliRunner()
+
+# Mock get_engine to use SQLite
+engine = create_engine(f"sqlite:///{db_path}")
+monkeypatch.setattr(db_module, "get_engine", lambda _source: engine)
+```
+
+For `scaffold` tests, always pass `--skip-db-setup` and all required connection params:
+
+```python
+result = runner.invoke(app, [
+    "project", "scaffold", "PRJ-001",
+    "--db-type", "postgresql", "--host", "localhost", "--port", "5432",
+    "--user", "postgres", "--password", "test", "--skip-db-setup"
+])
+```
+
+### Code Conventions
+
+- `from __future__ import annotations` at the top of every file
+- Type annotations required; mypy `disallow_untyped_defs = true`
+- Ruff line length 100, target Python 3.10
+- Beijing timezone: `datetime.now(timezone(timedelta(hours=8)))`
+- Git commits auto-generated by commands via `git_add_all` + `git_commit` in `antline/core/git.py`

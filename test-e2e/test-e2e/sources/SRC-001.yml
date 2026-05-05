@@ -1,0 +1,10 @@
+id: SRC-001
+name: prod
+db_type: postgresql
+host: db.example.com
+port: 5432
+database: prod
+user: admin
+password: secret123
+extra: {}
+created_at: '2026-04-29T08:05:24.423822'

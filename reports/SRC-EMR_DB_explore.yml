@@ -1,0 +1,3663 @@
+generated_at: '2026-04-29T08:36:06.669825Z'
+source_id: SRC-EMR_DB
+summary:
+  database: emr_db
+  db_type: postgresql
+  total_columns: 124
+  total_rows: 279800
+  total_tables: 6
+tables:
+- columns:
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: document_id
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - EMR0000001
+    - EMR0000002
+    - EMR0000003
+    - EMR0000004
+    - EMR0000005
+    stats:
+      is_unique_candidate: true
+      max_value: EMR0030000
+      min_value: EMR0000001
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1
+        value: EMR0000002
+      - count: 1
+        value: EMR0000003
+      - count: 1
+        value: EMR0000004
+      - count: 1
+        value: EMR0000005
+      - count: 1
+        value: EMR0000001
+      unique_count: 30000
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: patient_id
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - P000002
+    - P000003
+    - P000004
+    - P000006
+    - P000007
+    stats:
+      is_unique_candidate: false
+      max_value: P999928
+      min_value: P000002
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 28
+        value: P001367
+      - count: 27
+        value: P002133
+      - count: 27
+        value: P000045
+      - count: 26
+        value: P004501
+      - count: 25
+        value: P003809
+      unique_count: 8518
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: visit_id
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - IV0000001
+    - IV0000002
+    - IV0000003
+    - IV0000004
+    - IV0000005
+    stats:
+      is_unique_candidate: false
+      max_value: IV9998901
+      min_value: IV0000001
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 11
+        value: IV0000106
+      - count: 11
+        value: IV0000315
+      - count: 10
+        value: IV0001295
+      - count: 10
+        value: IV0000762
+      - count: 10
+        value: IV0001328
+      unique_count: 12261
+  - comment: null
+    data_type: VARCHAR(10)
+    default: null
+    max_length: null
+    name: visit_type
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 急诊
+    - 住院
+    - 门诊
+    stats:
+      is_unique_candidate: false
+      max_value: 门诊
+      min_value: 住院
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 10033
+        value: 急诊
+      - count: 10003
+        value: 门诊
+      - count: 9964
+        value: 住院
+      unique_count: 3
+  - comment: null
+    data_type: VARCHAR(30)
+    default: null
+    max_length: null
+    name: document_type
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 出院记录
+    - 入院记录
+    - 转科记录
+    - 首次病程记录
+    - 交接班记录
+    stats:
+      is_unique_candidate: false
+      max_value: 首次病程记录
+      min_value: 交接班记录
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 3071
+        value: 转科记录
+      - count: 3062
+        value: 会诊记录
+      - count: 3060
+        value: 手术记录
+      - count: 3053
+        value: 交接班记录
+      - count: 3012
+        value: 出院记录
+      unique_count: 10
+  - comment: null
+    data_type: VARCHAR(200)
+    default: null
+    max_length: null
+    name: document_title
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 入院记录-2131
+    - 交接班记录-8283
+    - 入院记录-19083
+    - 交接班记录-4731
+    - 日常病程记录-24488
+    stats:
+      is_unique_candidate: true
+      max_value: 首次病程记录-9988
+      min_value: 交接班记录-10031
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1
+        value: 交接班记录-8283
+      - count: 1
+        value: 入院记录-19083
+      - count: 1
+        value: 交接班记录-4731
+      - count: 1
+        value: 日常病程记录-24488
+      - count: 1
+        value: 入院记录-2131
+      unique_count: 30000
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: document_content
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 这是死亡记录的内容...
+    - 这是会诊记录的内容...
+    - 这是抢救记录的内容...
+    - 这是转科记录的内容...
+    - 这是手术记录的内容...
+    stats:
+      is_unique_candidate: false
+      max_value: 这是首次病程记录的内容...
+      min_value: 这是交接班记录的内容...
+      null_count: 1489
+      null_rate: 0.0496
+      topn_values:
+      - count: 2931
+        value: 这是转科记录的内容...
+      - count: 2918
+        value: 这是交接班记录的内容...
+      - count: 2909
+        value: 这是会诊记录的内容...
+      - count: 2899
+        value: 这是手术记录的内容...
+      - count: 2862
+        value: 这是出院记录的内容...
+      unique_count: 10
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: dept_id
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - DEPT049
+    - DEPT009
+    - DEPT030
+    - DEPT016
+    - DEPT026
+    stats:
+      is_unique_candidate: false
+      max_value: DEPT050
+      min_value: DEPT001
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 643
+        value: DEPT026
+      - count: 635
+        value: DEPT021
+      - count: 634
+        value: DEPT042
+      - count: 632
+        value: DEPT019
+      - count: 626
+        value: DEPT030
+      unique_count: 50
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: author_id
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - ST00027
+    - ST00011
+    - ST00175
+    - ST00157
+    - ST00164
+    stats:
+      is_unique_candidate: false
+      max_value: ST00200
+      min_value: ST00005
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 348
+        value: ST00043
+      - count: 344
+        value: ST00133
+      - count: 342
+        value: ST00109
+      - count: 339
+        value: ST00143
+      - count: 332
+        value: ST00200
+      unique_count: 99
+  - comment: null
+    data_type: VARCHAR(50)
+    default: null
+    max_length: null
+    name: author_name
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data: []
+    stats:
+      is_unique_candidate: false
+      max_value: null
+      min_value: null
+      null_count: 30000
+      null_rate: 1.0
+      topn_values:
+      - count: 30000
+        value: None
+      unique_count: 0
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: write_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2024-09-18T13:04:27'
+    - '2023-07-26T18:24:09'
+    - '2023-01-31T03:52:41'
+    - '2023-05-14T21:17:17'
+    - '2023-10-16T14:57:26'
+    stats:
+      is_unique_candidate: false
+      max_value: '2024-12-31 23:40:56'
+      min_value: '2023-01-01 01:45:46'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 2
+        value: '2024-12-22 18:37:22'
+      - count: 2
+        value: '2024-07-08 07:56:01'
+      - count: 2
+        value: '2024-01-24 00:20:36'
+      - count: 2
+        value: '2024-11-04 11:38:24'
+      - count: 2
+        value: '2023-12-22 10:33:26'
+      unique_count: 29994
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: sign_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2023-02-20T01:36:59'
+    - '2024-09-12T04:42:27'
+    - '2023-09-24T06:50:39'
+    - '2023-03-11T16:59:43'
+    - '2023-01-22T06:47:08'
+    stats:
+      is_unique_candidate: false
+      max_value: '2025-01-02 19:31:23'
+      min_value: '2023-01-01 05:18:31'
+      null_count: 8842
+      null_rate: 0.2947
+      topn_values:
+      - count: 8842
+        value: None
+      - count: 2
+        value: '2023-12-11 14:44:20'
+      - count: 2
+        value: '2024-12-08 01:27:38'
+      - count: 1
+        value: '2024-09-12 04:42:27'
+      - count: 1
+        value: '2023-03-11 16:59:43'
+      unique_count: 21156
+  - comment: null
+    data_type: CHAR(1)
+    default: null
+    max_length: null
+    name: sign_status
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '1'
+    - '0'
+    stats:
+      is_unique_candidate: false
+      max_value: '1'
+      min_value: '0'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 15044
+        value: '0'
+      - count: 14956
+        value: '1'
+      unique_count: 2
+  - comment: null
+    data_type: INTEGER
+    default: '0'
+    max_length: null
+    name: modify_count
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 0
+    - 1
+    - 3
+    - 5
+    - 2
+    stats:
+      is_unique_candidate: false
+      max_value: '5'
+      min_value: '0'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 5062
+        value: '4'
+      - count: 5019
+        value: '3'
+      - count: 5012
+        value: '1'
+      - count: 5001
+        value: '5'
+      - count: 4980
+        value: '0'
+      unique_count: 6
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: modifier_id
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - ST00027
+    - ST00011
+    - ST00175
+    - ST00157
+    - ST00164
+    stats:
+      is_unique_candidate: false
+      max_value: ST00200
+      min_value: ST00005
+      null_count: 11919
+      null_rate: 0.3973
+      topn_values:
+      - count: 11919
+        value: None
+      - count: 220
+        value: ST00043
+      - count: 214
+        value: ST00145
+      - count: 212
+        value: ST00109
+      - count: 209
+        value: ST00143
+      unique_count: 99
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: modify_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2023-03-18T01:46:33'
+    - '2024-10-24T10:06:32'
+    - '2024-09-29T23:14:37'
+    - '2024-01-04T19:49:52'
+    - '2023-04-03T00:31:57'
+    stats:
+      is_unique_candidate: false
+      max_value: '2025-01-03 22:01:04'
+      min_value: '2023-01-02 02:25:10'
+      null_count: 14847
+      null_rate: 0.4949
+      topn_values:
+      - count: 14847
+        value: None
+      - count: 1
+        value: '2024-10-24 10:06:32'
+      - count: 1
+        value: '2024-09-29 23:14:37'
+      - count: 1
+        value: '2024-01-04 19:49:52'
+      - count: 1
+        value: '2023-03-18 01:46:33'
+      unique_count: 15153
+  - comment: null
+    data_type: VARCHAR(10)
+    default: null
+    max_length: null
+    name: quality_status
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 乙
+    - 甲
+    - 丙
+    stats:
+      is_unique_candidate: false
+      max_value: 甲
+      min_value: 丙
+      null_count: 7513
+      null_rate: 0.2504
+      topn_values:
+      - count: 7547
+        value: 乙
+      - count: 7513
+        value: None
+      - count: 7504
+        value: 丙
+      - count: 7436
+        value: 甲
+      unique_count: 3
+  - comment: null
+    data_type: INTEGER
+    default: '0'
+    max_length: null
+    name: print_count
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 0
+    - 1
+    - 3
+    - 5
+    - 2
+    stats:
+      is_unique_candidate: false
+      max_value: '5'
+      min_value: '0'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 5035
+        value: '4'
+      - count: 5018
+        value: '0'
+      - count: 5010
+        value: '1'
+      - count: 5005
+        value: '3'
+      - count: 5004
+        value: '2'
+      unique_count: 6
+  - comment: null
+    data_type: VARCHAR(10)
+    default: null
+    max_length: null
+    name: status
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 归档
+    - 草稿
+    - 完成
+    stats:
+      is_unique_candidate: false
+      max_value: 草稿
+      min_value: 完成
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 10128
+        value: 完成
+      - count: 10056
+        value: 归档
+      - count: 9816
+        value: 草稿
+      unique_count: 3
+  - comment: null
+    data_type: TIMESTAMP
+    default: CURRENT_TIMESTAMP
+    max_length: null
+    name: create_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2026-04-24T08:43:30.618991'
+    - '2026-04-24T08:43:30.586824'
+    - '2026-04-24T08:43:30.759961'
+    - '2026-04-24T08:43:30.753195'
+    - '2026-04-24T08:43:30.737150'
+    stats:
+      is_unique_candidate: true
+      max_value: '2026-04-24 08:43:30.815444'
+      min_value: '2026-04-24 08:43:30.572167'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1
+        value: '2026-04-24 08:43:30.586824'
+      - count: 1
+        value: '2026-04-24 08:43:30.759961'
+      - count: 1
+        value: '2026-04-24 08:43:30.753195'
+      - count: 1
+        value: '2026-04-24 08:43:30.737150'
+      - count: 1
+        value: '2026-04-24 08:43:30.618991'
+      unique_count: 30000
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: update_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data: []
+    stats:
+      is_unique_candidate: false
+      max_value: null
+      min_value: null
+      null_count: 30000
+      null_rate: 1.0
+      topn_values:
+      - count: 30000
+        value: None
+      unique_count: 0
+  comment: null
+  name: emr_documents
+  primary_key:
+  - document_id
+  row_count: 30000
+  schema_name: public
+- columns:
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: note_id
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - PN0000001
+    - PN0000002
+    - PN0000003
+    - PN0000004
+    - PN0000005
+    stats:
+      is_unique_candidate: true
+      max_value: PN0080000
+      min_value: PN0000001
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1
+        value: PN0035860
+      - count: 1
+        value: PN0069923
+      - count: 1
+        value: PN0007144
+      - count: 1
+        value: PN0066929
+      - count: 1
+        value: PN0072169
+      unique_count: 80000
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: patient_id
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - P002024
+    - P982891
+    - P453665
+    - P511706
+    - P749155
+    stats:
+      is_unique_candidate: false
+      max_value: P999958
+      min_value: P000002
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 76
+        value: P001280
+      - count: 67
+        value: P004612
+      - count: 67
+        value: P002280
+      - count: 66
+        value: P003782
+      - count: 62
+        value: P001002
+      unique_count: 15887
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: visit_id
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - IV0000001
+    - IV0000002
+    - IV0000003
+    - IV0000004
+    - IV0000005
+    stats:
+      is_unique_candidate: false
+      max_value: IV9999196
+      min_value: IV0000001
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 22
+        value: IV0007005
+      - count: 22
+        value: IV0006630
+      - count: 19
+        value: IV0001773
+      - count: 19
+        value: IV0004061
+      - count: 19
+        value: IV0001297
+      unique_count: 19946
+  - comment: null
+    data_type: DATE
+    default: null
+    max_length: null
+    name: note_date
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2023-06-08'
+    - '2023-06-10'
+    - '2024-07-01'
+    - '2024-04-28'
+    - '2024-08-02'
+    stats:
+      is_unique_candidate: false
+      max_value: '2024-12-31'
+      min_value: '2023-01-01'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 140
+        value: '2024-11-16'
+      - count: 138
+        value: '2024-07-23'
+      - count: 138
+        value: '2023-04-06'
+      - count: 137
+        value: '2023-07-24'
+      - count: 136
+        value: '2023-10-24'
+      unique_count: 731
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: note_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2023-12-31T13:44:19'
+    - '2024-07-21T01:11:46'
+    - '2024-09-17T18:43:26'
+    - '2024-07-18T20:36:20'
+    - '2023-11-15T04:01:02'
+    stats:
+      is_unique_candidate: false
+      max_value: '2024-12-31 23:59:14'
+      min_value: '2023-01-01 00:03:57'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 2
+        value: '2024-05-21 20:44:59'
+      - count: 2
+        value: '2024-06-12 07:06:13'
+      - count: 2
+        value: '2023-03-16 15:51:50'
+      - count: 2
+        value: '2023-11-15 12:18:42'
+      - count: 2
+        value: '2023-11-15 02:32:14'
+      unique_count: 79957
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: note_type
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 交接班
+    - 抢救记录
+    - 日常病程
+    - 上级查房
+    - 阶段小结
+    stats:
+      is_unique_candidate: false
+      max_value: 阶段小结
+      min_value: 上级查房
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 16244
+        value: 上级查房
+      - count: 16045
+        value: 交接班
+      - count: 15931
+        value: 阶段小结
+      - count: 15918
+        value: 日常病程
+      - count: 15862
+        value: 抢救记录
+      unique_count: 5
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: content
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 患者今日病情...
+    stats:
+      is_unique_candidate: false
+      max_value: 患者今日病情...
+      min_value: 患者今日病情...
+      null_count: 8026
+      null_rate: 0.1003
+      topn_values:
+      - count: 71974
+        value: 患者今日病情...
+      - count: 8026
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: author_id
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - ST00027
+    - ST00011
+    - ST00164
+    - ST00175
+    - ST00157
+    stats:
+      is_unique_candidate: false
+      max_value: ST00200
+      min_value: ST00005
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 904
+        value: ST00185
+      - count: 866
+        value: ST00200
+      - count: 863
+        value: ST00053
+      - count: 859
+        value: ST00121
+      - count: 859
+        value: ST00127
+      unique_count: 99
+  - comment: null
+    data_type: VARCHAR(50)
+    default: null
+    max_length: null
+    name: author_name
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 朱智建
+    - 苏杰艳
+    - 宋静安
+    - 白宇诗
+    - 胡依昊
+    stats:
+      is_unique_candidate: false
+      max_value: 龚鹏杰
+      min_value: 丁一
+      null_count: 11847
+      null_rate: 0.1481
+      topn_values:
+      - count: 11847
+        value: None
+      - count: 11
+        value: 郭梓
+      - count: 11
+        value: 陶涵
+      - count: 10
+        value: 潘欣
+      - count: 10
+        value: 袁瑞
+      unique_count: 53589
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: sign_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2024-03-15T22:14:02'
+    - '2023-06-06T23:08:03'
+    - '2023-06-06T02:46:38'
+    - '2023-10-20T13:25:27'
+    - '2024-12-02T01:56:38'
+    stats:
+      is_unique_candidate: false
+      max_value: '2025-01-01 10:12:58'
+      min_value: '2023-01-01 04:33:33'
+      null_count: 28406
+      null_rate: 0.3551
+      topn_values:
+      - count: 28406
+        value: None
+      - count: 2
+        value: '2024-04-15 18:23:25'
+      - count: 2
+        value: '2023-10-16 08:10:54'
+      - count: 2
+        value: '2023-12-28 14:11:54'
+      - count: 2
+        value: '2024-04-05 02:08:31'
+      unique_count: 51572
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: record_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2023-12-31T13:44:19'
+    - '2024-07-21T01:11:46'
+    - '2024-09-17T18:43:26'
+    - '2024-07-18T20:36:20'
+    - '2023-11-15T04:01:02'
+    stats:
+      is_unique_candidate: false
+      max_value: '2024-12-31 23:59:14'
+      min_value: '2023-01-01 00:03:57'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 2
+        value: '2024-05-21 20:44:59'
+      - count: 2
+        value: '2024-06-12 07:06:13'
+      - count: 2
+        value: '2023-03-16 15:51:50'
+      - count: 2
+        value: '2023-11-15 12:18:42'
+      - count: 2
+        value: '2023-11-15 02:32:14'
+      unique_count: 79957
+  - comment: null
+    data_type: TIMESTAMP
+    default: CURRENT_TIMESTAMP
+    max_length: null
+    name: create_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2026-04-24T08:43:32.325506'
+    - '2026-04-24T08:43:32.446305'
+    - '2026-04-24T08:43:32.663391'
+    - '2026-04-24T08:43:32.321896'
+    - '2026-04-24T08:43:32.390693'
+    stats:
+      is_unique_candidate: true
+      max_value: '2026-04-24 08:43:32.753967'
+      min_value: '2026-04-24 08:43:32.269792'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1
+        value: '2026-04-24 08:43:32.446305'
+      - count: 1
+        value: '2026-04-24 08:43:32.663391'
+      - count: 1
+        value: '2026-04-24 08:43:32.321896'
+      - count: 1
+        value: '2026-04-24 08:43:32.390693'
+      - count: 1
+        value: '2026-04-24 08:43:32.325506'
+      unique_count: 80000
+  comment: null
+  name: progress_notes
+  primary_key:
+  - note_id
+  row_count: 80000
+  schema_name: public
+- columns:
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: record_id
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - AR0000001
+    - AR0000002
+    - AR0000003
+    - AR0000004
+    - AR0000005
+    stats:
+      is_unique_candidate: true
+      max_value: AR0008000
+      min_value: AR0000001
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1
+        value: AR0000002
+      - count: 1
+        value: AR0000003
+      - count: 1
+        value: AR0000004
+      - count: 1
+        value: AR0000005
+      - count: 1
+        value: AR0000001
+      unique_count: 8000
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: patient_id
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - P003011
+    - P685338
+    - P489782
+    - P000281
+    - P001401
+    stats:
+      is_unique_candidate: false
+      max_value: P999853
+      min_value: P000003
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 12
+        value: P004501
+      - count: 11
+        value: P001673
+      - count: 11
+        value: P003765
+      - count: 10
+        value: P000348
+      - count: 9
+        value: P003173
+      unique_count: 4269
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: visit_id
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - IV0000001
+    - IV0000002
+    - IV0000006
+    - IV0000007
+    - IV0000009
+    stats:
+      is_unique_candidate: false
+      max_value: IV9995054
+      min_value: IV0000001
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 6
+        value: IV0002428
+      - count: 5
+        value: IV0004072
+      - count: 5
+        value: IV0002202
+      - count: 5
+        value: IV0003462
+      - count: 5
+        value: IV0005090
+      unique_count: 5822
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: admission_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2024-07-17T10:52:07'
+    - '2023-09-20T18:07:36'
+    - '2024-07-31T00:41:43'
+    - '2024-11-04T14:54:38'
+    - '2024-08-30T17:30:57'
+    stats:
+      is_unique_candidate: false
+      max_value: '2024-12-31 17:05:40'
+      min_value: '2023-01-01 01:09:04'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 6
+        value: '2024-04-04 14:53:54'
+      - count: 5
+        value: '2023-01-12 02:48:25'
+      - count: 5
+        value: '2024-12-09 07:31:16'
+      - count: 5
+        value: '2024-08-31 07:06:28'
+      - count: 5
+        value: '2024-12-08 10:40:36'
+      unique_count: 5822
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: chief_complaint
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 发热伴咳嗽1周
+    stats:
+      is_unique_candidate: false
+      max_value: 发热伴咳嗽1周
+      min_value: 发热伴咳嗽1周
+      null_count: 910
+      null_rate: 0.1138
+      topn_values:
+      - count: 7090
+        value: 发热伴咳嗽1周
+      - count: 910
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: present_illness
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 患者1周前无明显诱因出现发热...
+    stats:
+      is_unique_candidate: false
+      max_value: 患者1周前无明显诱因出现发热...
+      min_value: 患者1周前无明显诱因出现发热...
+      null_count: 1167
+      null_rate: 0.1459
+      topn_values:
+      - count: 6833
+        value: 患者1周前无明显诱因出现发热...
+      - count: 1167
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: past_history
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 否认高血压、糖尿病病史
+    stats:
+      is_unique_candidate: false
+      max_value: 否认高血压、糖尿病病史
+      min_value: 否认高血压、糖尿病病史
+      null_count: 1649
+      null_rate: 0.2061
+      topn_values:
+      - count: 6351
+        value: 否认高血压、糖尿病病史
+      - count: 1649
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: personal_history
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 无吸烟饮酒史
+    stats:
+      is_unique_candidate: false
+      max_value: 无吸烟饮酒史
+      min_value: 无吸烟饮酒史
+      null_count: 2353
+      null_rate: 0.2941
+      topn_values:
+      - count: 5647
+        value: 无吸烟饮酒史
+      - count: 2353
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: family_history
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 否认家族遗传病史
+    stats:
+      is_unique_candidate: false
+      max_value: 否认家族遗传病史
+      min_value: 否认家族遗传病史
+      null_count: 2825
+      null_rate: 0.3531
+      topn_values:
+      - count: 5175
+        value: 否认家族遗传病史
+      - count: 2825
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: allergy_history
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 否认药物及食物过敏史
+    stats:
+      is_unique_candidate: false
+      max_value: 否认药物及食物过敏史
+      min_value: 否认药物及食物过敏史
+      null_count: 2008
+      null_rate: 0.251
+      topn_values:
+      - count: 5992
+        value: 否认药物及食物过敏史
+      - count: 2008
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: physical_exam
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - T 37.5C P 80次/分 R 20次/分 BP 120/80mmHg
+    stats:
+      is_unique_candidate: false
+      max_value: T 37.5C P 80次/分 R 20次/分 BP 120/80mmHg
+      min_value: T 37.5C P 80次/分 R 20次/分 BP 120/80mmHg
+      null_count: 799
+      null_rate: 0.0999
+      topn_values:
+      - count: 7201
+        value: T 37.5C P 80次/分 R 20次/分 BP 120/80mmHg
+      - count: 799
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: vital_signs
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 神志清楚，精神可
+    stats:
+      is_unique_candidate: false
+      max_value: 神志清楚，精神可
+      min_value: 神志清楚，精神可
+      null_count: 1207
+      null_rate: 0.1509
+      topn_values:
+      - count: 6793
+        value: 神志清楚，精神可
+      - count: 1207
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: auxiliary_exam
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 血常规示WBC 10.5x10^9/L
+    stats:
+      is_unique_candidate: false
+      max_value: 血常规示WBC 10.5x10^9/L
+      min_value: 血常规示WBC 10.5x10^9/L
+      null_count: 1606
+      null_rate: 0.2008
+      topn_values:
+      - count: 6394
+        value: 血常规示WBC 10.5x10^9/L
+      - count: 1606
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: preliminary_diagnosis
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 不适和疲劳
+    - 肺炎
+    - 其他软组织疾患
+    - 原发性高血压
+    - 乳腺恶性肿瘤
+    stats:
+      is_unique_candidate: false
+      max_value: 麻痹性肠梗阻
+      min_value: 2型糖尿病
+      null_count: 601
+      null_rate: 0.0751
+      topn_values:
+      - count: 601
+        value: None
+      - count: 91
+        value: 原发性高血压
+      - count: 85
+        value: 支气管和肺恶性肿瘤
+      - count: 84
+        value: 其他关节炎
+      - count: 84
+        value: 肋骨骨折
+      unique_count: 109
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: diagnosis_icd
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - A41
+    - K25
+    - H40
+    - K80
+    - E87
+    stats:
+      is_unique_candidate: false
+      max_value: Z54
+      min_value: A09
+      null_count: 1959
+      null_rate: 0.2449
+      topn_values:
+      - count: 1959
+        value: None
+      - count: 70
+        value: C50
+      - count: 69
+        value: C34
+      - count: 69
+        value: R53
+      - count: 68
+        value: I64
+      unique_count: 109
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: treatment_plan
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 抗感染对症支持治疗
+    stats:
+      is_unique_candidate: false
+      max_value: 抗感染对症支持治疗
+      min_value: 抗感染对症支持治疗
+      null_count: 1188
+      null_rate: 0.1485
+      topn_values:
+      - count: 6812
+        value: 抗感染对症支持治疗
+      - count: 1188
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: doctor_id
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - ST00027
+    - ST00011
+    - ST00175
+    - ST00157
+    - ST00164
+    stats:
+      is_unique_candidate: false
+      max_value: ST00200
+      min_value: ST00005
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 100
+        value: ST00085
+      - count: 99
+        value: ST00098
+      - count: 98
+        value: ST00010
+      - count: 98
+        value: ST00072
+      - count: 97
+        value: ST00026
+      unique_count: 99
+  - comment: null
+    data_type: VARCHAR(50)
+    default: null
+    max_length: null
+    name: doctor_name
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 严琪义
+    - 熊义雪
+    - 杨宏
+    - 熊秀英昊
+    - 曾盛宇
+    stats:
+      is_unique_candidate: false
+      max_value: 龚飞超
+      min_value: 丁一彤
+      null_count: 1144
+      null_rate: 0.143
+      topn_values:
+      - count: 1144
+        value: None
+      - count: 4
+        value: 张思
+      - count: 4
+        value: 谢萱
+      - count: 3
+        value: 严若
+      - count: 3
+        value: 邵静
+      unique_count: 6597
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: write_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2023-04-07T22:23:31'
+    - '2023-12-09T01:22:35'
+    - '2024-12-01T21:53:01'
+    - '2023-02-20T05:35:54'
+    - '2024-05-18T04:20:57'
+    stats:
+      is_unique_candidate: false
+      max_value: '2024-12-31 23:05:40'
+      min_value: '2023-01-01 04:57:01'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 3
+        value: '2024-01-22 14:01:42'
+      - count: 3
+        value: '2024-10-13 07:16:33'
+      - count: 3
+        value: '2023-12-27 23:44:27'
+      - count: 3
+        value: '2023-02-25 21:04:48'
+      - count: 3
+        value: '2023-08-11 12:22:01'
+      unique_count: 7557
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: sign_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2024-10-30T14:15:22'
+    - '2023-05-21T08:47:03'
+    - '2024-03-04T07:01:52'
+    - '2023-07-18T23:13:02'
+    - '2023-03-21T22:02:15'
+    stats:
+      is_unique_candidate: false
+      max_value: '2025-01-01 01:29:36'
+      min_value: '2023-01-01 09:57:01'
+      null_count: 2381
+      null_rate: 0.2976
+      topn_values:
+      - count: 2381
+        value: None
+      - count: 3
+        value: '2024-02-03 00:10:28'
+      - count: 2
+        value: '2024-01-21 16:25:11'
+      - count: 2
+        value: '2023-09-02 23:54:59'
+      - count: 2
+        value: '2023-12-11 13:45:34'
+      unique_count: 5563
+  - comment: null
+    data_type: TIMESTAMP
+    default: CURRENT_TIMESTAMP
+    max_length: null
+    name: create_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2026-04-24T08:43:35.744150'
+    - '2026-04-24T08:43:35.730432'
+    - '2026-04-24T08:43:35.729055'
+    - '2026-04-24T08:43:35.744967'
+    - '2026-04-24T08:43:35.728474'
+    stats:
+      is_unique_candidate: true
+      max_value: '2026-04-24 08:43:35.745586'
+      min_value: '2026-04-24 08:43:35.716672'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1
+        value: '2026-04-24 08:43:35.730432'
+      - count: 1
+        value: '2026-04-24 08:43:35.729055'
+      - count: 1
+        value: '2026-04-24 08:43:35.744967'
+      - count: 1
+        value: '2026-04-24 08:43:35.728474'
+      - count: 1
+        value: '2026-04-24 08:43:35.744150'
+      unique_count: 8000
+  comment: null
+  name: admission_records
+  primary_key:
+  - record_id
+  row_count: 8000
+  schema_name: public
+- columns:
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: record_id
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - DR0000001
+    - DR0000002
+    - DR0000003
+    - DR0000004
+    - DR0000005
+    stats:
+      is_unique_candidate: true
+      max_value: DR0007800
+      min_value: DR0000001
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1
+        value: DR0000002
+      - count: 1
+        value: DR0000003
+      - count: 1
+        value: DR0000004
+      - count: 1
+        value: DR0000005
+      - count: 1
+        value: DR0000001
+      unique_count: 7800
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: patient_id
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - P000281
+    - P706093
+    - P897511
+    - P001401
+    - P003733
+    stats:
+      is_unique_candidate: false
+      max_value: P999266
+      min_value: P000002
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 10
+        value: P003616
+      - count: 10
+        value: P003765
+      - count: 10
+        value: P001463
+      - count: 9
+        value: P003413
+      - count: 9
+        value: P000497
+      unique_count: 4171
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: visit_id
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - IV0000001
+    - IV0000002
+    - IV0000003
+    - IV0000004
+    - IV0000005
+    stats:
+      is_unique_candidate: false
+      max_value: IV9997480
+      min_value: IV0000001
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 7
+        value: IV0000471
+      - count: 6
+        value: IV0005123
+      - count: 5
+        value: IV0003755
+      - count: 5
+        value: IV0001793
+      - count: 5
+        value: IV0003083
+      unique_count: 5692
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: admission_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2023-11-16T22:27:29'
+    - '2023-04-21T16:08:24'
+    - '2023-07-14T00:49:02'
+    - '2023-03-12T21:42:48'
+    - '2024-01-06T07:25:27'
+    stats:
+      is_unique_candidate: false
+      max_value: '2024-12-30 23:05:28'
+      min_value: '2023-01-01 00:38:26'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 7
+        value: '2024-01-18 14:52:50'
+      - count: 6
+        value: '2023-09-25 03:06:47'
+      - count: 5
+        value: '2023-11-10 17:34:55'
+      - count: 5
+        value: '2023-08-22 23:42:26'
+      - count: 5
+        value: '2023-03-03 06:31:54'
+      unique_count: 5692
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: discharge_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2023-05-16T18:09:27'
+    - '2024-09-28T01:56:26'
+    - '2024-09-02T15:54:06'
+    - '2023-10-07T15:09:33'
+    - '2023-10-08T11:08:41'
+    stats:
+      is_unique_candidate: false
+      max_value: '2025-02-25 08:29:39'
+      min_value: '2023-01-02 08:14:25'
+      null_count: 158
+      null_rate: 0.0203
+      topn_values:
+      - count: 158
+        value: None
+      - count: 7
+        value: '2024-02-29 14:52:50'
+      - count: 6
+        value: '2023-10-26 03:06:47'
+      - count: 5
+        value: '2023-10-27 08:44:55'
+      - count: 5
+        value: '2023-10-10 04:09:36'
+      unique_count: 5643
+  - comment: null
+    data_type: INTEGER
+    default: null
+    max_length: null
+    name: hospital_days
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 1181
+    - 1081
+    - 51
+    - 926
+    - 52
+    stats:
+      is_unique_candidate: false
+      max_value: '1204'
+      min_value: '1'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 305
+        value: '8'
+      - count: 279
+        value: '9'
+      - count: 256
+        value: '6'
+      - count: 243
+        value: '5'
+      - count: 240
+        value: '4'
+      unique_count: 157
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: admission_diagnosis
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 发热待查
+    stats:
+      is_unique_candidate: false
+      max_value: 发热待查
+      min_value: 发热待查
+      null_count: 1183
+      null_rate: 0.1517
+      topn_values:
+      - count: 6617
+        value: 发热待查
+      - count: 1183
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: discharge_diagnosis
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 不适和疲劳
+    - 肺炎
+    - 原发性高血压
+    - 其他软组织疾患
+    - 乳腺恶性肿瘤
+    stats:
+      is_unique_candidate: false
+      max_value: 麻痹性肠梗阻
+      min_value: 2型糖尿病
+      null_count: 771
+      null_rate: 0.0988
+      topn_values:
+      - count: 771
+        value: None
+      - count: 84
+        value: 胃炎和十二指肠炎
+      - count: 81
+        value: 支气管和肺恶性肿瘤
+      - count: 80
+        value: 食管炎
+      - count: 79
+        value: 胰恶性肿瘤
+      unique_count: 109
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: diagnosis_icd
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - K25
+    - A41
+    - H40
+    - K80
+    - E87
+    stats:
+      is_unique_candidate: false
+      max_value: Z54
+      min_value: A09
+      null_count: 1971
+      null_rate: 0.2527
+      topn_values:
+      - count: 1971
+        value: None
+      - count: 69
+        value: K29
+      - count: 68
+        value: E87
+      - count: 67
+        value: J96
+      - count: 66
+        value: G43
+      unique_count: 109
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: treatment_summary
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 入院后完善相关检查...
+    stats:
+      is_unique_candidate: false
+      max_value: 入院后完善相关检查...
+      min_value: 入院后完善相关检查...
+      null_count: 1195
+      null_rate: 0.1532
+      topn_values:
+      - count: 6605
+        value: 入院后完善相关检查...
+      - count: 1195
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: discharge_status
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 治愈
+    stats:
+      is_unique_candidate: false
+      max_value: 治愈
+      min_value: 治愈
+      null_count: 904
+      null_rate: 0.1159
+      topn_values:
+      - count: 6896
+        value: 治愈
+      - count: 904
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: discharge_advice
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 出院带药，定期复查
+    stats:
+      is_unique_candidate: false
+      max_value: 出院带药，定期复查
+      min_value: 出院带药，定期复查
+      null_count: 1439
+      null_rate: 0.1845
+      topn_values:
+      - count: 6361
+        value: 出院带药，定期复查
+      - count: 1439
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: follow_up_plan
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 1周后门诊复查
+    stats:
+      is_unique_candidate: false
+      max_value: 1周后门诊复查
+      min_value: 1周后门诊复查
+      null_count: 2377
+      null_rate: 0.3047
+      topn_values:
+      - count: 5423
+        value: 1周后门诊复查
+      - count: 2377
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: doctor_id
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - ST00027
+    - ST00011
+    - ST00175
+    - ST00164
+    - ST00157
+    stats:
+      is_unique_candidate: false
+      max_value: ST00200
+      min_value: ST00005
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 109
+        value: ST00125
+      - count: 101
+        value: ST00010
+      - count: 100
+        value: ST00157
+      - count: 93
+        value: ST00024
+      - count: 93
+        value: ST00006
+      unique_count: 99
+  - comment: null
+    data_type: VARCHAR(50)
+    default: null
+    max_length: null
+    name: doctor_name
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 郭颖涵
+    - 魏信梦
+    - 刘一磊
+    - 覃光乐
+    - 卢浩安
+    stats:
+      is_unique_candidate: false
+      max_value: 龚鹏静
+      min_value: 丁丽
+      null_count: 1228
+      null_rate: 0.1574
+      topn_values:
+      - count: 1228
+        value: None
+      - count: 5
+        value: 范瑞
+      - count: 4
+        value: 覃嘉
+      - count: 3
+        value: 彭秀英
+      - count: 3
+        value: 袁勇
+      unique_count: 6319
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: write_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2024-05-06T05:08:37'
+    - '2024-04-30T00:53:03'
+    - '2024-07-12T16:19:55'
+    - '2024-04-03T22:38:19'
+    - '2023-11-11T00:54:30'
+    stats:
+      is_unique_candidate: false
+      max_value: '2025-02-25 07:29:39'
+      min_value: '2023-01-01 05:51:59'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 4
+        value: '2023-10-26 01:06:47'
+      - count: 4
+        value: '2023-10-27 06:44:55'
+      - count: 3
+        value: '2023-04-26 03:31:54'
+      - count: 3
+        value: '2024-08-04 03:14:52'
+      - count: 3
+        value: '2024-08-29 13:20:44'
+      unique_count: 7391
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: sign_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2023-10-08T11:08:41'
+    - '2023-05-13T22:38:32'
+    - '2024-05-25T21:39:22'
+    - '2024-07-23T09:41:48'
+    - '2024-02-09T02:04:24'
+    stats:
+      is_unique_candidate: false
+      max_value: '2025-02-25 08:29:39'
+      min_value: '2023-01-02 08:14:25'
+      null_count: 2377
+      null_rate: 0.3047
+      topn_values:
+      - count: 2377
+        value: None
+      - count: 5
+        value: '2024-02-29 14:52:50'
+      - count: 5
+        value: '2024-04-15 10:01:28'
+      - count: 4
+        value: '2023-04-30 07:42:26'
+      - count: 4
+        value: '2023-10-10 04:09:36'
+      unique_count: 4328
+  - comment: null
+    data_type: TIMESTAMP
+    default: CURRENT_TIMESTAMP
+    max_length: null
+    name: create_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2026-04-24T08:43:36.136342'
+    - '2026-04-24T08:43:36.132382'
+    - '2026-04-24T08:43:36.126181'
+    - '2026-04-24T08:43:36.141714'
+    - '2026-04-24T08:43:36.137020'
+    stats:
+      is_unique_candidate: true
+      max_value: '2026-04-24 08:43:36.146197'
+      min_value: '2026-04-24 08:43:36.122785'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1
+        value: '2026-04-24 08:43:36.132382'
+      - count: 1
+        value: '2026-04-24 08:43:36.126181'
+      - count: 1
+        value: '2026-04-24 08:43:36.141714'
+      - count: 1
+        value: '2026-04-24 08:43:36.137020'
+      - count: 1
+        value: '2026-04-24 08:43:36.136342'
+      unique_count: 7800
+  comment: null
+  name: discharge_records
+  primary_key:
+  - record_id
+  row_count: 7800
+  schema_name: public
+- columns:
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: record_id
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - SR0000001
+    - SR0000002
+    - SR0000003
+    - SR0000004
+    - SR0000005
+    stats:
+      is_unique_candidate: true
+      max_value: SR0004000
+      min_value: SR0000001
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1
+        value: SR0000002
+      - count: 1
+        value: SR0000003
+      - count: 1
+        value: SR0000004
+      - count: 1
+        value: SR0000005
+      - count: 1
+        value: SR0000001
+      unique_count: 4000
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: patient_id
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - P000281
+    - P000407
+    - P837291
+    - P004948
+    - P001401
+    stats:
+      is_unique_candidate: false
+      max_value: P999399
+      min_value: P000002
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 7
+        value: P004136
+      - count: 7
+        value: P004272
+      - count: 7
+        value: P002160
+      - count: 7
+        value: P004592
+      - count: 7
+        value: P001589
+      unique_count: 2669
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: visit_id
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - IV0000001
+    - IV0000006
+    - IV0000007
+    - IV0000012
+    - IV0000015
+    stats:
+      is_unique_candidate: false
+      max_value: IV9999486
+      min_value: IV0000001
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 5
+        value: IV0001040
+      - count: 5
+        value: IV0000137
+      - count: 4
+        value: IV0002156
+      - count: 4
+        value: IV0001119
+      - count: 4
+        value: IV0004584
+      unique_count: 3342
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: surgery_id
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - SG001998
+    - SG002817
+    - SG002142
+    - SG003133
+    - SG001747
+    stats:
+      is_unique_candidate: true
+      max_value: SG004000
+      min_value: SG000001
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1
+        value: SG002817
+      - count: 1
+        value: SG002142
+      - count: 1
+        value: SG003133
+      - count: 1
+        value: SG001747
+      - count: 1
+        value: SG001998
+      unique_count: 4000
+  - comment: null
+    data_type: VARCHAR(200)
+    default: null
+    max_length: null
+    name: surgery_name
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 胆囊切除术
+    - 剖宫产术
+    - 甲状腺切除术
+    - 子宫切除术
+    - 胃大部切除术
+    stats:
+      is_unique_candidate: false
+      max_value: 髋关节置换术
+      min_value: 乳腺切除术
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 226
+        value: 骨折内固定术
+      - count: 225
+        value: 脊柱融合术
+      - count: 217
+        value: 子宫切除术
+      - count: 212
+        value: 冠状动脉搭桥术
+      - count: 207
+        value: 开颅术
+      unique_count: 20
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: surgery_code
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '51.2'
+    - '36.1'
+    - '32.4'
+    - '41.5'
+    - '01.2'
+    stats:
+      is_unique_candidate: false
+      max_value: '85.4'
+      min_value: '01.2'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 395
+        value: '81.5'
+      - count: 226
+        value: '79.3'
+      - count: 225
+        value: '81.0'
+      - count: 217
+        value: '68.4'
+      - count: 212
+        value: '36.1'
+      unique_count: 19
+  - comment: null
+    data_type: VARCHAR(10)
+    default: null
+    max_length: null
+    name: surgery_level
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - II级
+    - I级
+    - III级
+    - IV级
+    stats:
+      is_unique_candidate: false
+      max_value: I级
+      min_value: III级
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1065
+        value: III级
+      - count: 997
+        value: IV级
+      - count: 982
+        value: I级
+      - count: 956
+        value: II级
+      unique_count: 4
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: pre_op_diagnosis
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 术前诊断
+    stats:
+      is_unique_candidate: false
+      max_value: 术前诊断
+      min_value: 术前诊断
+      null_count: 588
+      null_rate: 0.147
+      topn_values:
+      - count: 3412
+        value: 术前诊断
+      - count: 588
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: post_op_diagnosis
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 术后诊断
+    stats:
+      is_unique_candidate: false
+      max_value: 术后诊断
+      min_value: 术后诊断
+      null_count: 605
+      null_rate: 0.1512
+      topn_values:
+      - count: 3395
+        value: 术后诊断
+      - count: 605
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: surgeon_id
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - ST00027
+    - ST00011
+    - ST00175
+    - ST00157
+    - ST00164
+    stats:
+      is_unique_candidate: false
+      max_value: ST00200
+      min_value: ST00005
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 55
+        value: ST00019
+      - count: 52
+        value: ST00112
+      - count: 52
+        value: ST00164
+      - count: 50
+        value: ST00054
+      - count: 50
+        value: ST00143
+      unique_count: 99
+  - comment: null
+    data_type: VARCHAR(50)
+    default: null
+    max_length: null
+    name: surgeon_name
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 何佳梓
+    - 孟依诚
+    - 林雅潇潇
+    - 邵辉宇
+    - 吴涵勇
+    stats:
+      is_unique_candidate: false
+      max_value: 龚颖康
+      min_value: 丁军悦
+      null_count: 579
+      null_rate: 0.1447
+      topn_values:
+      - count: 579
+        value: None
+      - count: 3
+        value: 沈涵
+      - count: 3
+        value: 金宇
+      - count: 2
+        value: 侯信
+      - count: 2
+        value: 严超
+      unique_count: 3352
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: assistant1_id
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - ST00027
+    - ST00011
+    - ST00157
+    - ST00164
+    - ST00175
+    stats:
+      is_unique_candidate: false
+      max_value: ST00200
+      min_value: ST00005
+      null_count: 992
+      null_rate: 0.248
+      topn_values:
+      - count: 992
+        value: None
+      - count: 42
+        value: ST00197
+      - count: 40
+        value: ST00027
+      - count: 40
+        value: ST00084
+      - count: 40
+        value: ST00042
+      unique_count: 99
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: assistant2_id
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - ST00027
+    - ST00011
+    - ST00175
+    - ST00164
+    - ST00157
+    stats:
+      is_unique_candidate: false
+      max_value: ST00200
+      min_value: ST00005
+      null_count: 1658
+      null_rate: 0.4145
+      topn_values:
+      - count: 1658
+        value: None
+      - count: 40
+        value: ST00161
+      - count: 37
+        value: ST00054
+      - count: 34
+        value: ST00120
+      - count: 34
+        value: ST00115
+      unique_count: 99
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: anesthesiologist_id
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - ST00027
+    - ST00011
+    - ST00157
+    - ST00164
+    - ST00175
+    stats:
+      is_unique_candidate: false
+      max_value: ST00200
+      min_value: ST00005
+      null_count: 1231
+      null_rate: 0.3078
+      topn_values:
+      - count: 1231
+        value: None
+      - count: 45
+        value: ST00066
+      - count: 42
+        value: ST00103
+      - count: 42
+        value: ST00198
+      - count: 39
+        value: ST00011
+      unique_count: 99
+  - comment: null
+    data_type: VARCHAR(30)
+    default: null
+    max_length: null
+    name: anesthesia_type
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 颈丛
+    - 局麻
+    - 硬膜外
+    - 全麻
+    - 腰麻
+    stats:
+      is_unique_candidate: false
+      max_value: 颈丛
+      min_value: 全麻
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 838
+        value: 硬膜外
+      - count: 831
+        value: 颈丛
+      - count: 808
+        value: 局麻
+      - count: 763
+        value: 腰麻
+      - count: 760
+        value: 全麻
+      unique_count: 5
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: surgery_start_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2023-04-28T15:02:22'
+    - '2024-06-06T09:35:35'
+    - '2023-11-25T15:18:34'
+    - '2024-05-15T13:42:08'
+    - '2023-04-23T20:59:40'
+    stats:
+      is_unique_candidate: true
+      max_value: '2024-12-31 22:52:09'
+      min_value: '2023-01-01 02:01:19'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1
+        value: '2024-06-06 09:35:35'
+      - count: 1
+        value: '2023-11-25 15:18:34'
+      - count: 1
+        value: '2024-05-15 13:42:08'
+      - count: 1
+        value: '2023-04-23 20:59:40'
+      - count: 1
+        value: '2023-04-28 15:02:22'
+      unique_count: 4000
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: surgery_end_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2024-06-23T23:32:31'
+    - '2023-05-21T09:02:08'
+    - '2023-12-04T02:10:24'
+    - '2023-11-24T08:59:07'
+    - '2023-05-03T01:42:57'
+    stats:
+      is_unique_candidate: true
+      max_value: '2025-01-01 02:52:09'
+      min_value: '2023-01-01 04:16:29'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1
+        value: '2023-05-21 09:02:08'
+      - count: 1
+        value: '2023-12-04 02:10:24'
+      - count: 1
+        value: '2023-11-24 08:59:07'
+      - count: 1
+        value: '2023-05-03 01:42:57'
+      - count: 1
+        value: '2024-06-23 23:32:31'
+      unique_count: 4000
+  - comment: null
+    data_type: INTEGER
+    default: null
+    max_length: null
+    name: surgery_duration
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 351
+    - 184
+    - 87
+    - 116
+    - 273
+    stats:
+      is_unique_candidate: false
+      max_value: '360'
+      min_value: '30'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 24
+        value: '51'
+      - count: 24
+        value: '358'
+      - count: 23
+        value: '284'
+      - count: 22
+        value: '75'
+      - count: 22
+        value: '143'
+      unique_count: 331
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: incision_type
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - III类
+    - II类
+    - I类
+    - IV类
+    stats:
+      is_unique_candidate: false
+      max_value: I类
+      min_value: III类
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1040
+        value: III类
+      - count: 1034
+        value: II类
+      - count: 972
+        value: IV类
+      - count: 954
+        value: I类
+      unique_count: 4
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: operative_procedure
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 手术经过顺利...
+    stats:
+      is_unique_candidate: false
+      max_value: 手术经过顺利...
+      min_value: 手术经过顺利...
+      null_count: 459
+      null_rate: 0.1148
+      topn_values:
+      - count: 3541
+        value: 手术经过顺利...
+      - count: 459
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: intraoperative_findings
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 术中所见...
+    stats:
+      is_unique_candidate: false
+      max_value: 术中所见...
+      min_value: 术中所见...
+      null_count: 754
+      null_rate: 0.1885
+      topn_values:
+      - count: 3246
+        value: 术中所见...
+      - count: 754
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: NUMERIC(8, 1)
+    default: null
+    max_length: null
+    name: blood_loss
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '1022.1'
+    - '1873.1'
+    - '1718.3'
+    - '1105.3'
+    - '1844.4'
+    stats:
+      is_unique_candidate: false
+      max_value: '1999.0'
+      min_value: '50.8'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 4
+        value: '1117.8'
+      - count: 4
+        value: '659.0'
+      - count: 4
+        value: '1661.8'
+      - count: 3
+        value: '1810.1'
+      - count: 3
+        value: '1813.3'
+      unique_count: 3631
+  - comment: null
+    data_type: NUMERIC(8, 1)
+    default: null
+    max_length: null
+    name: blood_transfusion
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '242.1'
+    - '638.6'
+    - '937.9'
+    - '953.6'
+    - '900.6'
+    stats:
+      is_unique_candidate: false
+      max_value: '999.9'
+      min_value: '0.4'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 4
+        value: '928.0'
+      - count: 4
+        value: '555.2'
+      - count: 4
+        value: '225.0'
+      - count: 4
+        value: '89.7'
+      - count: 4
+        value: '689.0'
+      unique_count: 3291
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: specimen
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 送病理
+    stats:
+      is_unique_candidate: false
+      max_value: 送病理
+      min_value: 送病理
+      null_count: 1189
+      null_rate: 0.2973
+      topn_values:
+      - count: 2811
+        value: 送病理
+      - count: 1189
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: post_op_advice
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 注意休息，伤口换药
+    stats:
+      is_unique_candidate: false
+      max_value: 注意休息，伤口换药
+      min_value: 注意休息，伤口换药
+      null_count: 1012
+      null_rate: 0.253
+      topn_values:
+      - count: 2988
+        value: 注意休息，伤口换药
+      - count: 1012
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: VARCHAR(10)
+    default: null
+    max_length: null
+    name: status
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 取消
+    - 已完成
+    stats:
+      is_unique_candidate: false
+      max_value: 已完成
+      min_value: 取消
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 3020
+        value: 已完成
+      - count: 980
+        value: 取消
+      unique_count: 2
+  - comment: null
+    data_type: TIMESTAMP
+    default: CURRENT_TIMESTAMP
+    max_length: null
+    name: create_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2026-04-24T08:43:36.523307'
+    - '2026-04-24T08:43:36.506427'
+    - '2026-04-24T08:43:36.506967'
+    - '2026-04-24T08:43:36.522822'
+    - '2026-04-24T08:43:36.498989'
+    stats:
+      is_unique_candidate: true
+      max_value: '2026-04-24 08:43:36.527120'
+      min_value: '2026-04-24 08:43:36.494821'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1
+        value: '2026-04-24 08:43:36.506427'
+      - count: 1
+        value: '2026-04-24 08:43:36.506967'
+      - count: 1
+        value: '2026-04-24 08:43:36.522822'
+      - count: 1
+        value: '2026-04-24 08:43:36.498989'
+      - count: 1
+        value: '2026-04-24 08:43:36.523307'
+      unique_count: 4000
+  comment: null
+  name: surgery_records
+  primary_key:
+  - record_id
+  row_count: 4000
+  schema_name: public
+- columns:
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: record_id
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - NR00000001
+    - NR00000002
+    - NR00000003
+    - NR00000004
+    - NR00000005
+    stats:
+      is_unique_candidate: true
+      max_value: NR00150000
+      min_value: NR00000001
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1
+        value: NR00000002
+      - count: 1
+        value: NR00000003
+      - count: 1
+        value: NR00000004
+      - count: 1
+        value: NR00000005
+      - count: 1
+        value: NR00000001
+      unique_count: 150000
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: patient_id
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - P582339
+    - P844880
+    - P643578
+    - P001401
+    - P004194
+    stats:
+      is_unique_candidate: false
+      max_value: P999973
+      min_value: P000002
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 146
+        value: P001280
+      - count: 142
+        value: P003765
+      - count: 131
+        value: P003782
+      - count: 124
+        value: P003809
+      - count: 122
+        value: P001002
+      unique_count: 25983
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: visit_id
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - IV0000001
+    - IV0000002
+    - IV0000003
+    - IV0000004
+    - IV0000005
+    stats:
+      is_unique_candidate: false
+      max_value: IV9999962
+      min_value: IV0000001
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 32
+        value: IV0003767
+      - count: 32
+        value: IV0005645
+      - count: 31
+        value: IV0003585
+      - count: 31
+        value: IV0003936
+      - count: 30
+        value: IV0003382
+      unique_count: 30196
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: record_time
+    nullable: false
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2023-01-01T00:22:53'
+    - '2023-01-01T00:26:51'
+    - '2023-01-01T00:30:29'
+    - '2023-01-01T00:32:24'
+    - '2023-01-01T00:51:16'
+    stats:
+      is_unique_candidate: false
+      max_value: '2024-12-31 23:56:46'
+      min_value: '2023-01-01 00:22:53'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 2
+        value: '2023-01-15 14:51:42'
+      - count: 2
+        value: '2023-01-19 02:33:34'
+      - count: 2
+        value: '2023-01-07 02:29:46'
+      - count: 2
+        value: '2023-01-09 21:46:14'
+      - count: 2
+        value: '2023-01-19 17:06:48'
+      unique_count: 149797
+  - comment: null
+    data_type: VARCHAR(10)
+    default: null
+    max_length: null
+    name: shift
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 夜班
+    - 白班
+    stats:
+      is_unique_candidate: false
+      max_value: 白班
+      min_value: 夜班
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 75449
+        value: 白班
+      - count: 74551
+        value: 夜班
+      unique_count: 2
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: nurse_id
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - ST00002
+    - ST00003
+    - ST00004
+    - ST00008
+    - ST00009
+    stats:
+      is_unique_candidate: false
+      max_value: ST00199
+      min_value: ST00002
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 2468
+        value: ST00174
+      - count: 2458
+        value: ST00096
+      - count: 2441
+        value: ST00108
+      - count: 2431
+        value: ST00177
+      - count: 2428
+        value: ST00170
+      unique_count: 64
+  - comment: null
+    data_type: VARCHAR(50)
+    default: null
+    max_length: null
+    name: nurse_name
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 陈颖明
+    - 杨敏
+    - 曾博安
+    - 彭礼礼
+    - 程语佳
+    stats:
+      is_unique_candidate: false
+      max_value: 龚鹏辉
+      min_value: 丁一
+      null_count: 22433
+      null_rate: 0.1496
+      topn_values:
+      - count: 22433
+        value: None
+      - count: 19
+        value: 闫宇
+      - count: 17
+        value: 万梓
+      - count: 16
+        value: 郝瑞
+      - count: 16
+        value: 吴涵
+      unique_count: 91376
+  - comment: null
+    data_type: NUMERIC(4, 1)
+    default: null
+    max_length: null
+    name: temperature
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '36.0'
+    - '36.1'
+    - '36.2'
+    - '36.3'
+    - '36.4'
+    stats:
+      is_unique_candidate: false
+      max_value: '39.5'
+      min_value: '36.0'
+      null_count: 7450
+      null_rate: 0.0497
+      topn_values:
+      - count: 7450
+        value: None
+      - count: 4234
+        value: '36.6'
+      - count: 4187
+        value: '36.8'
+      - count: 4169
+        value: '37.6'
+      - count: 4161
+        value: '36.5'
+      unique_count: 36
+  - comment: null
+    data_type: INTEGER
+    default: null
+    max_length: null
+    name: pulse
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 60
+    - 61
+    - 62
+    - 63
+    - 64
+    stats:
+      is_unique_candidate: false
+      max_value: '120'
+      min_value: '60'
+      null_count: 7416
+      null_rate: 0.0494
+      topn_values:
+      - count: 7416
+        value: None
+      - count: 2440
+        value: '60'
+      - count: 2427
+        value: '113'
+      - count: 2426
+        value: '87'
+      - count: 2426
+        value: '100'
+      unique_count: 61
+  - comment: null
+    data_type: INTEGER
+    default: null
+    max_length: null
+    name: respiration
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 12
+    - 13
+    - 14
+    - 15
+    - 16
+    stats:
+      is_unique_candidate: false
+      max_value: '30'
+      min_value: '12'
+      null_count: 12158
+      null_rate: 0.0811
+      topn_values:
+      - count: 12158
+        value: None
+      - count: 7408
+        value: '22'
+      - count: 7393
+        value: '27'
+      - count: 7330
+        value: '28'
+      - count: 7317
+        value: '23'
+      unique_count: 19
+  - comment: null
+    data_type: VARCHAR(15)
+    default: null
+    max_length: null
+    name: blood_pressure
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 122/70
+    - 130/82
+    - 130/96
+    - 138/90
+    - 139/84
+    stats:
+      is_unique_candidate: false
+      max_value: 99/99
+      min_value: 100/100
+      null_count: 8986
+      null_rate: 0.0599
+      topn_values:
+      - count: 8986
+        value: None
+      - count: 74
+        value: 93/61
+      - count: 73
+        value: 147/100
+      - count: 73
+        value: 112/71
+      - count: 72
+        value: 123/68
+      unique_count: 2911
+  - comment: null
+    data_type: NUMERIC(5, 2)
+    default: null
+    max_length: null
+    name: spo2
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '90.00'
+    - '90.10'
+    - '90.20'
+    - '90.30'
+    - '90.40'
+    stats:
+      is_unique_candidate: false
+      max_value: '100.00'
+      min_value: '90.00'
+      null_count: 11961
+      null_rate: 0.0797
+      topn_values:
+      - count: 11961
+        value: None
+      - count: 1463
+        value: '92.60'
+      - count: 1460
+        value: '94.40'
+      - count: 1445
+        value: '96.30'
+      - count: 1438
+        value: '95.60'
+      unique_count: 101
+  - comment: null
+    data_type: VARCHAR(20)
+    default: null
+    max_length: null
+    name: consciousness
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 嗜睡
+    - 昏迷
+    - 模糊
+    - 清醒
+    - 谵妄
+    stats:
+      is_unique_candidate: false
+      max_value: 谵妄
+      min_value: 嗜睡
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 30124
+        value: 谵妄
+      - count: 30107
+        value: 昏迷
+      - count: 30066
+        value: 模糊
+      - count: 29933
+        value: 清醒
+      - count: 29770
+        value: 嗜睡
+      unique_count: 5
+  - comment: null
+    data_type: NUMERIC(8, 1)
+    default: null
+    max_length: null
+    name: intake_fluid
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2794.7'
+    - '638.6'
+    - '2293.9'
+    - '2892.2'
+    - '2747.0'
+    stats:
+      is_unique_candidate: false
+      max_value: '2999.9'
+      min_value: '500.0'
+      null_count: 22773
+      null_rate: 0.1518
+      topn_values:
+      - count: 22773
+        value: None
+      - count: 16
+        value: '1299.9'
+      - count: 15
+        value: '2095.7'
+      - count: 15
+        value: '2255.4'
+      - count: 14
+        value: '2874.1'
+      unique_count: 24837
+  - comment: null
+    data_type: NUMERIC(8, 1)
+    default: null
+    max_length: null
+    name: output_fluid
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '638.6'
+    - '2794.7'
+    - '2293.9'
+    - '2747.0'
+    - '2892.2'
+    stats:
+      is_unique_candidate: false
+      max_value: '3000.0'
+      min_value: '500.0'
+      null_count: 22447
+      null_rate: 0.1496
+      topn_values:
+      - count: 22447
+        value: None
+      - count: 16
+        value: '2777.1'
+      - count: 15
+        value: '1443.4'
+      - count: 15
+        value: '973.6'
+      - count: 15
+        value: '2085.4'
+      unique_count: 24831
+  - comment: null
+    data_type: NUMERIC(8, 1)
+    default: null
+    max_length: null
+    name: urine
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '638.6'
+    - '2293.9'
+    - '669.9'
+    - '2216.5'
+    - '1105.3'
+    stats:
+      is_unique_candidate: false
+      max_value: '2500.0'
+      min_value: '200.0'
+      null_count: 27106
+      null_rate: 0.1807
+      topn_values:
+      - count: 27106
+        value: None
+      - count: 16
+        value: '2125.3'
+      - count: 16
+        value: '1304.9'
+      - count: 16
+        value: '1390.0'
+      - count: 16
+        value: '1282.7'
+      unique_count: 22903
+  - comment: null
+    data_type: INTEGER
+    default: null
+    max_length: null
+    name: stool_count
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 0
+    - 1
+    - 2
+    - 3
+    stats:
+      is_unique_candidate: false
+      max_value: '3'
+      min_value: '0'
+      null_count: 45100
+      null_rate: 0.3007
+      topn_values:
+      - count: 45100
+        value: None
+      - count: 26494
+        value: '3'
+      - count: 26388
+        value: '2'
+      - count: 26012
+        value: '0'
+      - count: 26006
+        value: '1'
+      unique_count: 4
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: special_care
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 无特殊
+    stats:
+      is_unique_candidate: false
+      max_value: 无特殊
+      min_value: 无特殊
+      null_count: 37463
+      null_rate: 0.2498
+      topn_values:
+      - count: 112537
+        value: 无特殊
+      - count: 37463
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: skin_condition
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 完整
+    stats:
+      is_unique_candidate: false
+      max_value: 完整
+      min_value: 完整
+      null_count: 29779
+      null_rate: 0.1985
+      topn_values:
+      - count: 120221
+        value: 完整
+      - count: 29779
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: drainage
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 无
+    stats:
+      is_unique_candidate: false
+      max_value: 无
+      min_value: 无
+      null_count: 45107
+      null_rate: 0.3007
+      topn_values:
+      - count: 104893
+        value: 无
+      - count: 45107
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: medication
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 遵医嘱用药
+    stats:
+      is_unique_candidate: false
+      max_value: 遵医嘱用药
+      min_value: 遵医嘱用药
+      null_count: 37264
+      null_rate: 0.2484
+      topn_values:
+      - count: 112736
+        value: 遵医嘱用药
+      - count: 37264
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: observation
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 病情平稳
+    stats:
+      is_unique_candidate: false
+      max_value: 病情平稳
+      min_value: 病情平稳
+      null_count: 29788
+      null_rate: 0.1986
+      topn_values:
+      - count: 120212
+        value: 病情平稳
+      - count: 29788
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TEXT
+    default: null
+    max_length: null
+    name: nursing_measures
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - 继续观察
+    stats:
+      is_unique_candidate: false
+      max_value: 继续观察
+      min_value: 继续观察
+      null_count: 37190
+      null_rate: 0.2479
+      topn_values:
+      - count: 112810
+        value: 继续观察
+      - count: 37190
+        value: None
+      unique_count: 1
+  - comment: null
+    data_type: TIMESTAMP
+    default: null
+    max_length: null
+    name: signature_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2023-01-01T00:29:51'
+    - '2023-01-01T00:33:24'
+    - '2023-01-01T00:41:29'
+    - '2023-01-01T00:49:53'
+    - '2023-01-01T01:03:16'
+    stats:
+      is_unique_candidate: false
+      max_value: '2025-01-01 00:26:46'
+      min_value: '2023-01-01 00:29:51'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 2
+        value: '2024-10-31 07:24:33'
+      - count: 2
+        value: '2024-04-24 22:47:29'
+      - count: 2
+        value: '2024-01-07 19:35:29'
+      - count: 2
+        value: '2024-04-03 21:24:26'
+      - count: 2
+        value: '2024-08-14 19:41:16'
+      unique_count: 149814
+  - comment: null
+    data_type: TIMESTAMP
+    default: CURRENT_TIMESTAMP
+    max_length: null
+    name: create_time
+    nullable: true
+    numeric_precision: null
+    numeric_scale: null
+    sample_data:
+    - '2026-04-24T08:43:36.751724'
+    - '2026-04-24T08:43:36.751743'
+    - '2026-04-24T08:43:36.751755'
+    - '2026-04-24T08:43:36.751765'
+    - '2026-04-24T08:43:36.751774'
+    stats:
+      is_unique_candidate: true
+      max_value: '2026-04-24 08:43:38.101723'
+      min_value: '2026-04-24 08:43:36.751724'
+      null_count: 0
+      null_rate: 0.0
+      topn_values:
+      - count: 1
+        value: '2026-04-24 08:43:36.829273'
+      - count: 1
+        value: '2026-04-24 08:43:37.187351'
+      - count: 1
+        value: '2026-04-24 08:43:37.319050'
+      - count: 1
+        value: '2026-04-24 08:43:37.135029'
+      - count: 1
+        value: '2026-04-24 08:43:37.155239'
+      unique_count: 150000
+  comment: null
+  name: nursing_records
+  primary_key:
+  - record_id
+  row_count: 150000
+  schema_name: public

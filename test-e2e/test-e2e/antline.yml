@@ -1,0 +1,12 @@
+project:
+  name: test-project
+  description: ''
+dbt:
+  project_dir: ./dbt
+  profiles_dir: ~/.dbt
+  target: dev
+paths:
+  sources: sources
+  requirements: requirements
+  projects: projects
+  reports: reports
