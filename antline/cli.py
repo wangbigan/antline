@@ -19,6 +19,25 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=True,
 )
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        from importlib.metadata import version
+
+        typer.echo(f"antline {version('antline')}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _callback(
+    version: bool = typer.Option(
+        False, "--version", "-v", callback=_version_callback, is_eager=True
+    ),
+) -> None:
+    """Antline CLI."""
+    pass
+
 app.add_typer(source.app, name="source", help="Data source management")
 app.add_typer(requirement.app, name="requirement", help="Data requirement management")
 app.add_typer(project.app, name="project", help="Data project management")
