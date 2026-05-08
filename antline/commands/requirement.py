@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from rich.console import Console
 from rich.table import Table
 
 from antline.core.config import ProjectState
+from antline.core.csv_schema import import_schema_from_csv, save_schemas_as_yaml
 from antline.core.git import git_add_all, git_commit
 from antline.core.models import (
     AssessmentRisk,
@@ -400,16 +402,20 @@ def update(
 @app.command("add-schema")
 def add_schema(
     req_id: str = typer.Argument(..., help="Requirement ID"),
-    schema_paths: list[Path] = typer.Argument(..., help="Path(s) to target schema YAML file(s) or directory"),
+    schema_paths: list[Path] = typer.Argument(
+        ..., help="Path(s) to target schema YAML file(s), directory, or CSV file"
+    ),
 ) -> None:
     """Add target schema(s) to an existing requirement.
 
-    Schema files are copied into requirements/{id}/target_schema/ for versioning.
+    Supports YAML files, directories of YAML files, or CSV files.
+    Schema files are saved into requirements/{id}/target_schema/ for versioning.
     Adding schemas resets any existing assessment.
 
-    Example:
+    Examples:
         antline requirement add-schema REQ-20260508-001 target_schema/patients.yaml
         antline requirement add-schema REQ-20260508-001 target_schema/hosp/
+        antline requirement add-schema REQ-20260508-001 standard_schema.csv
     """
     state = ProjectState()
     req = state.get_requirement(req_id)
@@ -417,39 +423,52 @@ def add_schema(
         console.print(f"[red]Requirement not found:[/] {req_id}")
         raise typer.Exit(1)
 
-    # Resolve all schema paths: files directly, directories recursively
-    resolved_paths: list[Path] = []
-    for path in schema_paths:
-        if path.is_dir():
-            resolved_paths.extend(sorted(path.glob("*.yaml")))
-            resolved_paths.extend(sorted(path.glob("*.yml")))
-        elif path.exists():
-            resolved_paths.append(path)
-        else:
-            console.print(f"[red]Path not found:[/] {path}")
-            raise typer.Exit(1)
-
-    if not resolved_paths:
-        console.print("[yellow]No schema files found.[/]")
-        raise typer.Exit(0)
-
     # Ensure target_schema directory exists
     target_schema_dir = state.root / "requirements" / req_id / "target_schema"
     target_schema_dir.mkdir(parents=True, exist_ok=True)
 
     new_schemas: list[TargetSchema] = []
-    copied: list[Path] = []
-    for sp in resolved_paths:
-        data = yaml.safe_load(sp.read_text())
-        schema = TargetSchema.model_validate(data)
+    saved_paths: list[Path] = []
 
-        # Copy file into requirement's target_schema directory
-        dest = target_schema_dir / sp.name
-        import shutil
-        shutil.copy2(sp, dest)
-        copied.append(dest)
+    for path in schema_paths:
+        if not path.exists():
+            console.print(f"[red]Path not found:[/] {path}")
+            raise typer.Exit(1)
 
-        new_schemas.append(schema)
+        if path.suffix.lower() == ".csv":
+            # Import from CSV
+            csv_schemas = import_schema_from_csv(path)
+            for schema in csv_schemas:
+                dest = target_schema_dir / f"{schema.table}.yaml"
+                save_schemas_as_yaml([schema], target_schema_dir)
+                new_schemas.append(schema)
+                saved_paths.append(dest)
+        elif path.is_dir():
+            for sp in sorted(path.glob("*.yaml")):
+                data = yaml.safe_load(sp.read_text())
+                schema = TargetSchema.model_validate(data)
+                dest = target_schema_dir / sp.name
+                shutil.copy2(sp, dest)
+                new_schemas.append(schema)
+                saved_paths.append(dest)
+            for sp in sorted(path.glob("*.yml")):
+                data = yaml.safe_load(sp.read_text())
+                schema = TargetSchema.model_validate(data)
+                dest = target_schema_dir / sp.name
+                shutil.copy2(sp, dest)
+                new_schemas.append(schema)
+                saved_paths.append(dest)
+        else:
+            data = yaml.safe_load(path.read_text())
+            schema = TargetSchema.model_validate(data)
+            dest = target_schema_dir / path.name
+            shutil.copy2(path, dest)
+            new_schemas.append(schema)
+            saved_paths.append(dest)
+
+    if not new_schemas:
+        console.print("[yellow]No schema files found.[/]")
+        raise typer.Exit(0)
 
     # Append to existing schemas (avoid duplicates by table name)
     existing_tables = {s.table for s in req.target_schemas}
@@ -479,8 +498,8 @@ def add_schema(
     console.print(f"[green]Added {appended} schema(s) to requirement:[/] {req_id}")
     for s in new_schemas[:appended]:
         console.print(f"  - {s.table} ({len(s.fields)} fields)")
-    if copied:
-        console.print(f"  Copied to: {target_schema_dir}")
+    if saved_paths:
+        console.print(f"  Saved to: {target_schema_dir}")
 
 
 @app.command()

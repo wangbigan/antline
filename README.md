@@ -48,9 +48,10 @@ antline requirement create --name "Unified patient view" \
   --background "Hospital needs a unified patient dimension" \
   --goal "Build a standardized patients table from HIS + EMR"
 
-# Add target schema to the requirement (single table or whole directory)
+# Add target schema to the requirement (YAML file, directory, or CSV)
 antline requirement add-schema REQ-20260508-001 target_schema/patients.yaml
 antline requirement add-schema REQ-20260508-001 target_schema/hosp/
+antline requirement add-schema REQ-20260508-001 standard_schema.csv
 
 # Assess feasibility against source data (draft for review)
 antline requirement assess REQ-20260508-001 SRC-20260508-001
@@ -201,7 +202,7 @@ IDs are sequential within the same date. Cross-date IDs do not interfere with ea
 | `antline requirement create --name NAME [--background TEXT] [--goal TEXT]` | Create a requirement |
 | `antline requirement list [--json]` | List all requirements |
 | `antline requirement show REQ-xxx` | Show requirement details |
-| `antline requirement add-schema REQ-xxx PATH [PATH ...]` | Add target schema YAML(s) to a requirement |
+| `antline requirement add-schema REQ-xxx PATH [PATH ...]` | Add target schema YAML(s), directory, or CSV to a requirement |
 | `antline requirement assess REQ-xxx SRC-xxx [SRC-yyy ...] [--focus TABLES] [--full]` | Generate LLM prompt + human guide + Markdown template for review |
 | `antline requirement approve REQ-xxx [--file PATH] [--force]` | Confirm requirement after reviewing assessment.md |
 | `antline requirement update REQ-xxx ...` | Update requirement (resets assessment) |
@@ -315,11 +316,10 @@ antline requirement create --name "统一患者视图" \
   --background "医院 HIS 和 EMR 系统患者数据分散，需要统一视图" \
   --goal "建立 MIMIC-IV 标准的 patients + admissions 维度表"
 
-# 2. Add target schema(s) to the requirement
+# 2. Add target schema(s) to the requirement (YAML, directory, or CSV)
 antline requirement add-schema REQ-20260508-001 target_schema/patients.yaml
-
-# Or add a whole directory
 antline requirement add-schema REQ-20260508-001 target_schema/hosp/
+antline requirement add-schema REQ-20260508-001 hospital_standard.csv
 
 # Assess feasibility — generates prompts and template (does NOT auto-map)
 # Default: table/field metadata only, no statistics
