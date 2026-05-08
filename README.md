@@ -43,16 +43,14 @@ antline source explore SRC-20260508-001
 # Import target schema from CSV (e.g. MIMIC-IV standard)
 antline schema import /path/to/standard_schema.csv --output-dir target_schema
 
-# Define a requirement (single table)
+# Define a requirement
 antline requirement create --name "Unified patient view" \
-  --target-schema target_schema/patients.yaml \
   --background "Hospital needs a unified patient dimension" \
   --goal "Build a standardized patients table from HIS + EMR"
 
-# Or multiple tables / a whole directory
-antline requirement create --name "Inpatient full view" \
-  --target-schema target_schema/hosp/ \
-  --background "..." --goal "..."
+# Add target schema to the requirement (single table or whole directory)
+antline requirement add-schema REQ-20260508-001 target_schema/patients.yaml
+antline requirement add-schema REQ-20260508-001 target_schema/hosp/
 
 # Assess feasibility against source data (draft for review)
 antline requirement assess REQ-20260508-001 SRC-20260508-001
@@ -200,9 +198,10 @@ IDs are sequential within the same date. Cross-date IDs do not interfere with ea
 
 | Command | Description |
 |---------|-------------|
-| `antline requirement create --name NAME --target-schema PATH ...` | Create a requirement (multiple files or dirs) |
+| `antline requirement create --name NAME [--background TEXT] [--goal TEXT]` | Create a requirement |
 | `antline requirement list [--json]` | List all requirements |
 | `antline requirement show REQ-xxx` | Show requirement details |
+| `antline requirement add-schema REQ-xxx PATH [PATH ...]` | Add target schema YAML(s) to a requirement |
 | `antline requirement assess REQ-xxx SRC-xxx [SRC-yyy ...] [--focus TABLES] [--full]` | Generate LLM prompt + human guide + Markdown template for review |
 | `antline requirement approve REQ-xxx [--file PATH] [--force]` | Confirm requirement after reviewing assessment.md |
 | `antline requirement update REQ-xxx ...` | Update requirement (resets assessment) |
@@ -311,15 +310,16 @@ Tables: 47 | Rows: 1,234,567 | Columns: 892
 ### 4. Create, Assess, and Approve Requirements
 
 ```bash
-# Create requirement from target schema(s)
+# 1. Create the requirement (background + goal)
 antline requirement create --name "统一患者视图" \
-  --target-schema target_schema/patients.yaml \
   --background "医院 HIS 和 EMR 系统患者数据分散，需要统一视图" \
   --goal "建立 MIMIC-IV 标准的 patients + admissions 维度表"
 
-# Or create from a whole directory
-antline requirement create --name "全量住院视图" \
-  --target-schema target_schema/hosp/
+# 2. Add target schema(s) to the requirement
+antline requirement add-schema REQ-20260508-001 target_schema/patients.yaml
+
+# Or add a whole directory
+antline requirement add-schema REQ-20260508-001 target_schema/hosp/
 
 # Assess feasibility — generates prompts and template (does NOT auto-map)
 # Default: table/field metadata only, no statistics
@@ -432,9 +432,9 @@ report = yaml.safe_load(run("antline source explore SRC-20260508-001 --json"))
 # 3. Agent defines requirement with background + goal
 run(
     "antline requirement create --name X "
-    "--target-schema schema.yaml "
     "--background '...' --goal '...'"
 )
+run("antline requirement add-schema REQ-20260508-001 schema.yaml")
 
 # 4. Agent generates assessment materials (prompt + template)
 run("antline requirement assess REQ-20260508-001 SRC-20260508-001")

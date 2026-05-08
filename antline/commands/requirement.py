@@ -397,6 +397,92 @@ def update(
     console.print(f"[green]Updated requirement:[/] {req_id}")
 
 
+@app.command("add-schema")
+def add_schema(
+    req_id: str = typer.Argument(..., help="Requirement ID"),
+    schema_paths: list[Path] = typer.Argument(..., help="Path(s) to target schema YAML file(s) or directory"),
+) -> None:
+    """Add target schema(s) to an existing requirement.
+
+    Schema files are copied into requirements/{id}/target_schema/ for versioning.
+    Adding schemas resets any existing assessment.
+
+    Example:
+        antline requirement add-schema REQ-20260508-001 target_schema/patients.yaml
+        antline requirement add-schema REQ-20260508-001 target_schema/hosp/
+    """
+    state = ProjectState()
+    req = state.get_requirement(req_id)
+    if not req:
+        console.print(f"[red]Requirement not found:[/] {req_id}")
+        raise typer.Exit(1)
+
+    # Resolve all schema paths: files directly, directories recursively
+    resolved_paths: list[Path] = []
+    for path in schema_paths:
+        if path.is_dir():
+            resolved_paths.extend(sorted(path.glob("*.yaml")))
+            resolved_paths.extend(sorted(path.glob("*.yml")))
+        elif path.exists():
+            resolved_paths.append(path)
+        else:
+            console.print(f"[red]Path not found:[/] {path}")
+            raise typer.Exit(1)
+
+    if not resolved_paths:
+        console.print("[yellow]No schema files found.[/]")
+        raise typer.Exit(0)
+
+    # Ensure target_schema directory exists
+    target_schema_dir = state.root / "requirements" / req_id / "target_schema"
+    target_schema_dir.mkdir(parents=True, exist_ok=True)
+
+    new_schemas: list[TargetSchema] = []
+    copied: list[Path] = []
+    for sp in resolved_paths:
+        data = yaml.safe_load(sp.read_text())
+        schema = TargetSchema.model_validate(data)
+
+        # Copy file into requirement's target_schema directory
+        dest = target_schema_dir / sp.name
+        import shutil
+        shutil.copy2(sp, dest)
+        copied.append(dest)
+
+        new_schemas.append(schema)
+
+    # Append to existing schemas (avoid duplicates by table name)
+    existing_tables = {s.table for s in req.target_schemas}
+    appended = 0
+    for schema in new_schemas:
+        if schema.table not in existing_tables:
+            req.target_schemas.append(schema)
+            existing_tables.add(schema.table)
+            appended += 1
+        else:
+            console.print(f"[yellow]Skipped duplicate table:[/] {schema.table}")
+
+    if appended == 0:
+        console.print("[yellow]No new schemas added (all tables already exist).[/]")
+        raise typer.Exit(0)
+
+    # Reset assessment when target schema changes
+    if req.assessment:
+        req.assessment = None
+        req.status = RequirementStatus.DRAFT
+        console.print(f"[yellow]Assessment reset:[/] schemas changed")
+
+    state.save_requirement(req)
+    git_add_all(state.root)
+    git_commit(f"feat(requirement): add schema(s) to {req_id}", state.root)
+
+    console.print(f"[green]Added {appended} schema(s) to requirement:[/] {req_id}")
+    for s in new_schemas[:appended]:
+        console.print(f"  - {s.table} ({len(s.fields)} fields)")
+    if copied:
+        console.print(f"  Copied to: {target_schema_dir}")
+
+
 @app.command()
 def remove(
     req_id: str = typer.Argument(..., help="Requirement ID to remove"),
