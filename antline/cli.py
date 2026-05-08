@@ -24,9 +24,9 @@ app = typer.Typer(
 
 def _version_callback(value: bool) -> None:
     if value:
-        from importlib.metadata import version
+        import antline
 
-        typer.echo(f"antline {version('antline')}")
+        typer.echo(f"antline {antline.__version__}")
         raise typer.Exit()
 
 
