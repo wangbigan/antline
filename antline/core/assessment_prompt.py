@@ -38,8 +38,7 @@ def _format_field_full(col: ColumnMeta) -> str:
         lines.append(f"  - 最大值: {stats.max_value}")
     if stats.topn_values:
         top = ", ".join(
-            f"{v.get('value', '?')}({v.get('count', 0)})"
-            for v in stats.topn_values[:5]
+            f"{v.get('value', '?')}({v.get('count', 0)})" for v in stats.topn_values[:5]
         )
         lines.append(f"  - 高频值: {top}")
     if col.sample_data:
@@ -304,14 +303,16 @@ def generate_assessment_template(req: Requirement, source_ids: list[str]) -> str
     mappings = []
     for schema in req.target_schemas:
         for field in schema.fields:
-            mappings.append({
-                "target_field": f"{schema.table}.{field.name}",
-                "source_table": None,
-                "source_field": None,
-                "mapping_type": "missing",
-                "transform_logic": "",
-                "risk": "high",
-            })
+            mappings.append(
+                {
+                    "target_field": f"{schema.table}.{field.name}",
+                    "source_table": None,
+                    "source_field": None,
+                    "mapping_type": "missing",
+                    "transform_logic": "",
+                    "risk": "high",
+                }
+            )
 
     frontmatter = {
         "feasible": False,
@@ -341,16 +342,18 @@ def generate_assessment_template(req: Requirement, source_ids: list[str]) -> str
     ]
     for m in mappings:
         lines.append(f"| {m['target_field']} | - | - | missing | high |")
-    lines.extend([
-        "",
-        "## 风险分析",
-        "",
-        "（待补充）",
-        "",
-        "## 备注",
-        "",
-        "（待补充）",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 风险分析",
+            "",
+            "（待补充）",
+            "",
+            "## 备注",
+            "",
+            "（待补充）",
+            "",
+        ]
+    )
 
     return "\n".join(lines)

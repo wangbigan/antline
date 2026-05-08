@@ -27,7 +27,6 @@ class WorkspacePlatformConfig(BaseModel):
     port: int
     user: str
     password: str | None = None
-    database: str
 
 
 class FieldStats(BaseModel):
@@ -104,7 +103,9 @@ class SourceExploreReport(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     source_id: str
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone(timedelta(hours=8))))
+    generated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone(timedelta(hours=8)))
+    )
     tables: list[TableMeta] = Field(default_factory=list)
     summary: dict[str, Any] = Field(default_factory=dict)
 
@@ -187,7 +188,7 @@ class Requirement(BaseModel):
     name: str
     status: RequirementStatus = RequirementStatus.DRAFT
     background: str = ""  # business context / why
-    goal: str = ""        # target outcome / what
+    goal: str = ""  # target outcome / what
     target_schemas: list[TargetSchema] = Field(default_factory=list)
     assessment: RequirementAssessment | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone(timedelta(hours=8))))

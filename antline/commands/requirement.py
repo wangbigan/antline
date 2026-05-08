@@ -30,7 +30,9 @@ console = Console()
 @app.command()
 def create(
     name: str = typer.Option(..., "--name", "-n", help="Requirement name"),
-    background: str = typer.Option("", "--background", "-b", help="Business context / why this requirement exists"),
+    background: str = typer.Option(
+        "", "--background", "-b", help="Business context / why this requirement exists"
+    ),
     goal: str = typer.Option("", "--goal", "-g", help="Target outcome / what to achieve"),
     target_schema: list[Path] = typer.Option(
         [], "--target-schema", "-s", help="Path to target schema YAML file(s) or directory"
@@ -139,13 +141,16 @@ def assess(
     req_id: str = typer.Argument(..., help="Requirement ID"),
     source_ids: list[str] = typer.Argument(..., help="One or more source IDs to assess against"),
     focus: str = typer.Option(
-        "", "--focus", "-f",
-        help="Comma-separated list of source table names to focus on (e.g. patients,admissions)"
+        "",
+        "--focus",
+        "-f",
+        help="Comma-separated list of source table names to focus on (e.g. patients,admissions)",
     ),
     full_stats: bool = typer.Option(
-        False, "--full",
+        False,
+        "--full",
         help="Include full field statistics (null rates, unique counts, top values). "
-             "Without --focus, applies to all tables."
+        "Without --focus, applies to all tables.",
     ),
 ) -> None:
     """Generate assessment materials (prompt + guide + template) for human/LLM review.
@@ -236,9 +241,11 @@ def assess(
 def approve(
     req_id: str = typer.Argument(..., help="Requirement ID to approve"),
     assessment_file: Path = typer.Option(
-        None, "--file", "-f",
+        None,
+        "--file",
+        "-f",
         help="Path to the completed assessment Markdown file. "
-             "Defaults to reports/assessment/{req_id}_assessment.md"
+        "Defaults to reports/assessment/{req_id}_assessment.md",
     ),
     force: bool = typer.Option(False, "--force", help="Approve even if not feasible"),
 ) -> None:
@@ -259,9 +266,7 @@ def approve(
         return
 
     if req.status != RequirementStatus.ASSESSED:
-        console.print(
-            f"[red]需求尚未评估。当前状态: {req.status.value}[/]"
-        )
+        console.print(f"[red]需求尚未评估。当前状态: {req.status.value}[/]")
         raise typer.Exit(1)
 
     # Determine assessment file path (default to .md)
@@ -327,10 +332,7 @@ def approve(
         raise typer.Exit(1)
 
     if not feasible and not force:
-        console.print(
-            "[red]评估标记为不可行。"
-            "使用 --force 强制通过，或先修复问题。[/]"
-        )
+        console.print("[red]评估标记为不可行。使用 --force 强制通过，或先修复问题。[/]")
         raise typer.Exit(1)
 
     req.assessment = assessment
@@ -350,7 +352,9 @@ def update(
     name: str = typer.Option(None, "--name", "-n"),
     background: str = typer.Option(None, "--background", "-b"),
     goal: str = typer.Option(None, "--goal", "-g"),
-    target_schema: list[Path] = typer.Option([], "--target-schema", "-s", help="Path to target schema YAML file(s) or directory"),
+    target_schema: list[Path] = typer.Option(
+        [], "--target-schema", "-s", help="Path to target schema YAML file(s) or directory"
+    ),
 ) -> None:
     """Update a requirement. Resets assessment status if schemas change."""
     state = ProjectState()
@@ -406,9 +410,7 @@ def remove(
         raise typer.Exit(1)
 
     if not force:
-        confirm = typer.confirm(
-            f"Remove requirement {req_id} ({req.name})?"
-        )
+        confirm = typer.confirm(f"Remove requirement {req_id} ({req.name})?")
         if not confirm:
             console.print("[yellow]Cancelled.[/]")
             raise typer.Exit(0)

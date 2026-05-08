@@ -65,11 +65,15 @@ def add(
         except Exception as exc:
             error_msg = str(exc).lower()
             if "does not exist" in error_msg or ("database" in error_msg and "exist" in error_msg):
-                console.print(f"[red]failed[/]\n  Database '{database}' does not exist on {host}:{port}")
+                console.print(
+                    f"[red]failed[/]\n  Database '{database}' does not exist on {host}:{port}"
+                )
             elif "authentication" in error_msg or "password" in error_msg:
                 console.print("[red]failed[/]\n  Authentication failed — check user/password")
             elif "connection" in error_msg or "refused" in error_msg or "timeout" in error_msg:
-                console.print(f"[red]failed[/]\n  Cannot connect to {host}:{port} — check host/port")
+                console.print(
+                    f"[red]failed[/]\n  Cannot connect to {host}:{port} — check host/port"
+                )
             else:
                 console.print(f"[red]failed[/]\n  {exc}")
             raise typer.Exit(1)

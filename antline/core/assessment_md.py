@@ -29,9 +29,11 @@ def render_assessment_report(req: Requirement) -> str:
     # Review instructions
     lines.append("---")
     lines.append("")
-    lines.append("> **Review Instructions:** Edit the tables below to fix mappings or adjust risk levels. "
-                 "After review, save this file without the `_template` suffix (as `.md`) "
-                 "and run: `antline requirement approve {req.id}`")
+    lines.append(
+        "> **Review Instructions:** Edit the tables below to fix mappings or adjust risk levels. "
+        "After review, save this file without the `_template` suffix (as `.md`) "
+        "and run: `antline requirement approve {req.id}`"
+    )
     lines.append("")
     lines.append("---")
     lines.append("")

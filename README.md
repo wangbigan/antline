@@ -31,7 +31,7 @@ pip install antline[all]
 mkdir my-data-workspace && cd my-data-workspace
 antline init --name "Hospital Data Team" \
   --db-type postgresql --host localhost --port 5432 \
-  --user postgres --password '***' --database antline_workspace
+  --user postgres --password '***'
 
 # Add a data source
 antline source add --type postgresql --host localhost --port 5432 \
@@ -174,7 +174,7 @@ IDs are sequential within the same date. Cross-date IDs do not interfere with ea
 | Command | Description |
 |---------|-------------|
 | `antline --version` | Show version |
-| `antline init [--path DIR] [--name NAME] --db-type TYPE --host H --port P --user U --password PWD [--database DB]` | Initialize workspace with platform config |
+| `antline init [--path DIR] [--name NAME] --db-type TYPE --host H --port P --user U --password PWD [--no-test-connection]` | Initialize workspace with platform config |
 | `antline status` | Show workspace overview (sources, requirements, projects) |
 
 ### Source Management
@@ -259,7 +259,7 @@ Prerequisites:
 ```bash
 antline init --name "医院数据团队" \
   --db-type postgresql --host localhost --port 5432 \
-  --user wbg --password '***' --database hospital_data
+  --user wbg --password '***'
 ```
 
 ### 2. Define Target Standard
@@ -424,7 +424,7 @@ antline source explore SRC-20260508-001 --json
 
 ```python
 # 1. Agent initializes workspace
-run("antline init --name X --db-type postgresql --host localhost --port 5432 --user postgres --password '***' --database mydb")
+run("antline init --name X --db-type postgresql --host localhost --port 5432 --user postgres --password '***'")
 
 # 2. Agent reads source metadata
 report = yaml.safe_load(run("antline source explore SRC-20260508-001 --json"))

@@ -53,18 +53,118 @@ _CHINESE_SURNAMES_SINGLE = set(
 
 # Common compound surnames (复姓)
 _CHINESE_SURNAMES_COMPOUND = [
-    "欧阳", "太史", "端木", "上官", "司马", "东方", "独孤", "南宫", "夏侯", "诸葛",
-    "尉迟", "皇甫", "公孙", "慕容", "仲孙", "长孙", "宇文", "司徒", "鲜于", "司空",
-    "闾丘", "子车", "亓官", "司寇", "巫马", "颛孙", "壤驷", "公良", "漆雕", "宰父",
-    "谷梁", "段干", "百里", "东郭", "南门", "呼延", "归海", "羊舌", "微生", "岳帅",
-    "缑亢", "况后", "有琴", "梁丘", "左丘", "东门", "西门", "商牟", "佘佴", "伯赏",
-    "万俟", "司马", "上官", "欧阳", "夏侯", "诸葛", "闻人", "东方", "赫连", "皇甫",
-    "尉迟", "公羊", "澹台", "公冶", "宗政", "濮阳", "淳于", "单于", "太叔", "申屠",
-    "公孙", "仲孙", "轩辕", "令狐", "钟离", "宇文", "长孙", "慕容", "鲜于", "闾丘",
-    "司徒", "司空", "亓官", "司寇", "仉督", "子车", "颛孙", "端木", "巫马", "公西",
-    "漆雕", "乐正", "壤驷", "公良", "拓跋", "夹谷", "宰父", "谷梁", "段干", "百里",
-    "东郭", "南门", "呼延", "归海", "羊舌", "微生", "梁丘", "左丘", "东门", "西门",
-    "南宫", "第五",
+    "欧阳",
+    "太史",
+    "端木",
+    "上官",
+    "司马",
+    "东方",
+    "独孤",
+    "南宫",
+    "夏侯",
+    "诸葛",
+    "尉迟",
+    "皇甫",
+    "公孙",
+    "慕容",
+    "仲孙",
+    "长孙",
+    "宇文",
+    "司徒",
+    "鲜于",
+    "司空",
+    "闾丘",
+    "子车",
+    "亓官",
+    "司寇",
+    "巫马",
+    "颛孙",
+    "壤驷",
+    "公良",
+    "漆雕",
+    "宰父",
+    "谷梁",
+    "段干",
+    "百里",
+    "东郭",
+    "南门",
+    "呼延",
+    "归海",
+    "羊舌",
+    "微生",
+    "岳帅",
+    "缑亢",
+    "况后",
+    "有琴",
+    "梁丘",
+    "左丘",
+    "东门",
+    "西门",
+    "商牟",
+    "佘佴",
+    "伯赏",
+    "万俟",
+    "司马",
+    "上官",
+    "欧阳",
+    "夏侯",
+    "诸葛",
+    "闻人",
+    "东方",
+    "赫连",
+    "皇甫",
+    "尉迟",
+    "公羊",
+    "澹台",
+    "公冶",
+    "宗政",
+    "濮阳",
+    "淳于",
+    "单于",
+    "太叔",
+    "申屠",
+    "公孙",
+    "仲孙",
+    "轩辕",
+    "令狐",
+    "钟离",
+    "宇文",
+    "长孙",
+    "慕容",
+    "鲜于",
+    "闾丘",
+    "司徒",
+    "司空",
+    "亓官",
+    "司寇",
+    "仉督",
+    "子车",
+    "颛孙",
+    "端木",
+    "巫马",
+    "公西",
+    "漆雕",
+    "乐正",
+    "壤驷",
+    "公良",
+    "拓跋",
+    "夹谷",
+    "宰父",
+    "谷梁",
+    "段干",
+    "百里",
+    "东郭",
+    "南门",
+    "呼延",
+    "归海",
+    "羊舌",
+    "微生",
+    "梁丘",
+    "左丘",
+    "东门",
+    "西门",
+    "南宫",
+    "第五",
 ]
 
 # Build regex for Chinese names:
@@ -80,7 +180,7 @@ _CHINESE_NAME = re.compile(
 # Date-like: YYYY-MM-DD or YYYY/MM/DD — used for exclusion only, NOT as PII
 _DATE_LIKE = re.compile(
     r"^\d{4}[-/]\d{1,2}[-/]\d{1,2}$|"  # 1990-01-01
-    r"^\d{1,2}[-/]\d{1,2}[-/]\d{4}$"   # 01-01-1990
+    r"^\d{1,2}[-/]\d{1,2}[-/]\d{4}$"  # 01-01-1990
 )
 
 # Address detection: contains Chinese admin division keywords
@@ -114,7 +214,15 @@ _COL_NAME_SENSITIVE: dict[str, list[str]] = {
 
 # Exclusions for column-name matching (to avoid false positives like username, filename)
 _COL_NAME_EXCLUDES: dict[str, list[str]] = {
-    "chinese_name": ["username", "groupname", "filename", "classname", "tablename", "columnname", "dbname"],
+    "chinese_name": [
+        "username",
+        "groupname",
+        "filename",
+        "classname",
+        "tablename",
+        "columnname",
+        "dbname",
+    ],
 }
 
 
@@ -230,14 +338,13 @@ def field_has_pii(samples: list[Any], col_name: str = "", threshold: float = 0.3
     if unique_samples == 0:
         return []
 
-    pii_sample_count = sum(
-        1 for s in samples if detect_pii(s, col_name)
-    )
+    pii_sample_count = sum(1 for s in samples if detect_pii(s, col_name))
     ratio = pii_sample_count / len(samples)
 
     if ratio >= threshold:
         # Return the most common PII types found
         from collections import Counter
+
         return [label for label, _ in Counter(all_matches).most_common(3)]
 
     return []
@@ -290,7 +397,9 @@ def mask_value(value: Any, pii_types: list[str] | None = None, col_name: str = "
         or lower_col.startswith("name_")
         or "姓名" in lower_col
     )
-    if "chinese_name" in types or (is_name_col and "user" not in lower_col and "group" not in lower_col):
+    if "chinese_name" in types or (
+        is_name_col and "user" not in lower_col and "group" not in lower_col
+    ):
         return s[0] + "*" * (len(s) - 1)
 
     # Address: keep admin divisions, mask detailed part

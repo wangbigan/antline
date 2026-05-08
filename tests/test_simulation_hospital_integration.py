@@ -326,7 +326,17 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
 
     # --- Step 1: init ---
     result = runner.invoke(
-        app, ["init", "--path", ".", "--name", "hospital-integration", "--password", "test"]
+        app,
+        [
+            "init",
+            "--path",
+            ".",
+            "--name",
+            "hospital-integration",
+            "--password",
+            "test",
+            "--no-test-connection",
+        ],
     )
     assert result.exit_code == 0, result.output
 
@@ -455,36 +465,111 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
         # Simulate LLM generating assessment from template (Markdown + frontmatter)
         assessment_dir = project_root / "requirements" / req_id / "assessment"
         template_path = assessment_dir / "template.md"
-        template = yaml.safe_load(
-            template_path.read_text().split("---")[1]
-        )
+        template = yaml.safe_load(template_path.read_text().split("---")[1])
         template["feasible"] = True
         for m in template["field_mappings"]:
             target = m["target_field"]
             if target == "patients.subject_id":
-                m.update({"source_table": "patient_info", "source_field": "subject_id", "mapping_type": "direct", "risk": "low"})
+                m.update(
+                    {
+                        "source_table": "patient_info",
+                        "source_field": "subject_id",
+                        "mapping_type": "direct",
+                        "risk": "low",
+                    }
+                )
             elif target == "patients.name":
-                m.update({"source_table": "patient_info", "source_field": "name", "mapping_type": "direct", "risk": "low"})
+                m.update(
+                    {
+                        "source_table": "patient_info",
+                        "source_field": "name",
+                        "mapping_type": "direct",
+                        "risk": "low",
+                    }
+                )
             elif target == "patients.gender":
-                m.update({"source_table": "patient_info", "source_field": "gender", "mapping_type": "direct", "risk": "low"})
+                m.update(
+                    {
+                        "source_table": "patient_info",
+                        "source_field": "gender",
+                        "mapping_type": "direct",
+                        "risk": "low",
+                    }
+                )
             elif target == "patients.dob":
-                m.update({"source_table": "patient_info", "source_field": "dob", "mapping_type": "direct", "risk": "low"})
+                m.update(
+                    {
+                        "source_table": "patient_info",
+                        "source_field": "dob",
+                        "mapping_type": "direct",
+                        "risk": "low",
+                    }
+                )
             elif target == "patients.dod":
                 m.update({"mapping_type": "missing", "risk": "high"})
             elif target == "admissions.subject_id":
-                m.update({"source_table": "admission_records", "source_field": "subject_id", "mapping_type": "direct", "risk": "low"})
+                m.update(
+                    {
+                        "source_table": "admission_records",
+                        "source_field": "subject_id",
+                        "mapping_type": "direct",
+                        "risk": "low",
+                    }
+                )
             elif target == "admissions.hadm_id":
-                m.update({"source_table": "admission_records", "source_field": "hadm_id", "mapping_type": "direct", "risk": "low"})
+                m.update(
+                    {
+                        "source_table": "admission_records",
+                        "source_field": "hadm_id",
+                        "mapping_type": "direct",
+                        "risk": "low",
+                    }
+                )
             elif target == "admissions.admittime":
-                m.update({"source_table": "admission_records", "source_field": "admittime", "mapping_type": "direct", "risk": "low"})
+                m.update(
+                    {
+                        "source_table": "admission_records",
+                        "source_field": "admittime",
+                        "mapping_type": "direct",
+                        "risk": "low",
+                    }
+                )
             elif target == "admissions.dischtime":
-                m.update({"source_table": "admission_records", "source_field": "dischtime", "mapping_type": "direct", "risk": "low"})
+                m.update(
+                    {
+                        "source_table": "admission_records",
+                        "source_field": "dischtime",
+                        "mapping_type": "direct",
+                        "risk": "low",
+                    }
+                )
             elif target == "admissions.admission_type":
-                m.update({"source_table": "admission_records", "source_field": "admission_type", "mapping_type": "direct", "risk": "low"})
+                m.update(
+                    {
+                        "source_table": "admission_records",
+                        "source_field": "admission_type",
+                        "mapping_type": "direct",
+                        "risk": "low",
+                    }
+                )
             elif target == "admissions.discharge_location":
-                m.update({"source_table": "admission_records", "source_field": "discharge_location", "mapping_type": "direct", "risk": "low"})
+                m.update(
+                    {
+                        "source_table": "admission_records",
+                        "source_field": "discharge_location",
+                        "mapping_type": "direct",
+                        "risk": "low",
+                    }
+                )
             elif target == "admissions.hospital_expire_flag":
-                m.update({"source_table": "admission_records", "source_field": "hospital_expire_flag", "mapping_type": "direct", "risk": "low"})
+                m.update(
+                    {
+                        "source_table": "admission_records",
+                        "source_field": "hospital_expire_flag",
+                        "mapping_type": "direct",
+                        "risk": "low",
+                    }
+                )
 
         # Build Markdown assessment with frontmatter
         frontmatter = yaml.safe_dump(template, allow_unicode=True, sort_keys=False)
@@ -564,9 +649,7 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
     assert result.exit_code == 0, result.output
     prj_id = f"PRJ-{TODAY}-001"
 
-    prj_data = yaml.safe_load(
-        (project_root / "projects" / prj_id / "project.yml").read_text()
-    )
+    prj_data = yaml.safe_load((project_root / "projects" / prj_id / "project.yml").read_text())
     assert prj_data["name"] == "医院数据集成项目"
     assert set(prj_data["requirement_ids"]) == {req_patients, req_admissions}
     assert len(prj_data["qc_rules"]) == 2  # one per target table

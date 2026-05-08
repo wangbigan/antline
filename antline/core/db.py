@@ -122,16 +122,37 @@ def _get_sample_data(
 
 # Field name tokens that indicate sensitive data (exact word match)
 _SENSITIVE_WORDS = (
-    "name", "phone", "tel", "mobile", "email", "mail",
-    "card", "identity", "address", "addr",
-    "password", "passwd", "pwd", "ssn", "social",
-    "bank", "account",
+    "name",
+    "phone",
+    "tel",
+    "mobile",
+    "email",
+    "mail",
+    "card",
+    "identity",
+    "address",
+    "addr",
+    "password",
+    "passwd",
+    "pwd",
+    "ssn",
+    "social",
+    "bank",
+    "account",
 )
 
 # Chinese sensitive substrings
 _SENSITIVE_CHINESE = (
-    "姓名", "电话", "手机", "邮箱", "身份证",
-    "地址", "住址", "密码", "卡号", "账号",
+    "姓名",
+    "电话",
+    "手机",
+    "邮箱",
+    "身份证",
+    "地址",
+    "住址",
+    "密码",
+    "卡号",
+    "账号",
 )
 
 # Prefixes that make "name" non-sensitive (e.g. group_name, type_name)
@@ -166,7 +187,9 @@ def _is_sensitive(col_name: str) -> bool:
     return False
 
 
-def explore_source(source: DataSource, max_tables: int = 0, mask_sensitive: bool = True) -> SourceExploreReport:
+def explore_source(
+    source: DataSource, max_tables: int = 0, mask_sensitive: bool = True
+) -> SourceExploreReport:
     """Explore a data source and return metadata + statistics."""
     engine = get_engine(source)
     inspector: Inspector = inspect(engine)
@@ -229,7 +252,9 @@ def explore_source(source: DataSource, max_tables: int = 0, mask_sensitive: bool
                     pii_types = field_has_pii(sample, col_name)
                     value_sensitive = bool(pii_types)
                     if name_sensitive or value_sensitive:
-                        sample = [mask_value(v, pii_types=pii_types, col_name=col_name) for v in sample]
+                        sample = [
+                            mask_value(v, pii_types=pii_types, col_name=col_name) for v in sample
+                        ]
 
                 if row_count > 0:
                     stats.null_rate = round(stats.null_count / row_count, 4)

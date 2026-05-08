@@ -43,7 +43,9 @@ def _dbt_safe_name(name: str) -> str:
     return safe
 
 
-def _load_explore_reports(state: ProjectState, source_ids: list[str]) -> dict[str, SourceExploreReport]:
+def _load_explore_reports(
+    state: ProjectState, source_ids: list[str]
+) -> dict[str, SourceExploreReport]:
     """Load explore reports for the given source IDs."""
     reports: dict[str, SourceExploreReport] = {}
     for sid in source_ids:
@@ -58,14 +60,12 @@ def _load_explore_reports(state: ProjectState, source_ids: list[str]) -> dict[st
 def _collect_scaffold_data(
     project: Project, state: ProjectState
 ) -> tuple[
-    dict[str, list[str]],          # source_id -> list of used table names
+    dict[str, list[str]],  # source_id -> list of used table names
     dict[str, dict[str, list[FieldMapping]]],  # req_id -> {target_table: [mappings]}
 ]:
     """Collect tables and mappings needed for scaffold from assessments."""
     used_tables: dict[str, set[str]] = defaultdict(set)
-    req_mappings: dict[str, dict[str, list[FieldMapping]]] = defaultdict(
-        lambda: defaultdict(list)
-    )
+    req_mappings: dict[str, dict[str, list[FieldMapping]]] = defaultdict(lambda: defaultdict(list))
 
     for req_id in project.requirement_ids:
         req = state.get_requirement(req_id)
@@ -188,14 +188,14 @@ def _generate_dbt_project_yml(project: Project, dbt_dir: Path) -> Path:
     macro_dir = dbt_dir / "macros"
     macro_dir.mkdir(parents=True, exist_ok=True)
     (macro_dir / "generate_schema_name.sql").write_text(
-        '''{% macro generate_schema_name(custom_schema_name, node) -%}
+        """{% macro generate_schema_name(custom_schema_name, node) -%}
     {%- if custom_schema_name is none -%}
         {{ default_schema }}
     {%- else -%}
         {{ custom_schema_name | trim }}
     {%- endif -%}
 {%- endmacro %}
-''',
+""",
         encoding="utf-8",
     )
 
@@ -217,9 +217,7 @@ def _generate_dbt_profile(
     env_var_name = f"DBT_PASSWORD_{project.id.replace('-', '_')}"
 
     # dbt adapter type mapping
-    dbt_type = {"postgresql": "postgres", "mysql": "mysql", "tidb": "mysql"}.get(
-        db_type, db_type
-    )
+    dbt_type = {"postgresql": "postgres", "mysql": "mysql", "tidb": "mysql"}.get(db_type, db_type)
 
     profile = {
         profile_name: {
@@ -319,8 +317,7 @@ def _generate_sources_yml(
                 "name": src.id,
                 "schema": schema,
                 "tables": [
-                    {"name": t, "description": f"Source table from {src.name}"}
-                    for t in tables
+                    {"name": t, "description": f"Source table from {src.name}"} for t in tables
                 ],
             }
 
@@ -477,9 +474,7 @@ def _generate_map_models(
                     )
                 elif m.mapping_type == "transform" and m.source_field:
                     if m.transform_logic:
-                        fields_sql.append(
-                            f"    -- TODO: {m.transform_logic}"
-                        )
+                        fields_sql.append(f"    -- TODO: {m.transform_logic}")
                         fields_sql.append(
                             f"    {m.source_field} AS {target_field},  -- transform from {m.source_table}"
                         )
@@ -492,9 +487,7 @@ def _generate_map_models(
                         f"    NULL AS {target_field},  -- TODO: merge from multiple sources"
                     )
                 else:  # missing or unmapped
-                    fields_sql.append(
-                        f"    NULL AS {target_field},  -- missing: no source mapping"
-                    )
+                    fields_sql.append(f"    NULL AS {target_field},  -- missing: no source mapping")
 
             # Remove trailing comma from the last field line so "FROM" doesn't follow ","
             if fields_sql:
@@ -511,15 +504,10 @@ def _generate_map_models(
                 from_ref = f"{{{{ ref('row_{primary_table.lower().replace(' ', '_')}') }}}}"
 
                 # If multiple tables contribute, add CTE hints
-                other_tables = [
-                    t for t in table_counts if t != primary_table
-                ]
+                other_tables = [t for t in table_counts if t != primary_table]
                 cte_hints = ""
                 if other_tables:
-                    cte_lines = "\n".join(
-                        f"--   - {t}: JOIN or UNION needed"
-                        for t in other_tables
-                    )
+                    cte_lines = "\n".join(f"--   - {t}: JOIN or UNION needed" for t in other_tables)
                     cte_hints = f"""
 -- NOTE: This target table requires data from multiple source tables.
 -- Additional sources to integrate:
@@ -539,9 +527,7 @@ FROM {from_ref}
             (models_dir / f"{model_name}.sql").write_text(sql)
 
 
-def _generate_clean_models(
-    project: Project, state: ProjectState, dbt_dir: Path
-) -> None:
+def _generate_clean_models(project: Project, state: ProjectState, dbt_dir: Path) -> None:
     """Generate clean layer model templates from target schemas."""
     models_dir = dbt_dir / "models" / "clean"
     models_dir.mkdir(parents=True, exist_ok=True)
@@ -563,9 +549,7 @@ def _generate_clean_models(
             for f in schema.fields:
                 null_str = "nullable" if f.nullable else "NOT NULL"
                 comment_part = f": {f.description}" if f.description else ""
-                field_lines.append(
-                    f"    {f.name},     -- {f.data_type} {null_str}{comment_part}"
-                )
+                field_lines.append(f"    {f.name},     -- {f.data_type} {null_str}{comment_part}")
 
             # Remove trailing comma from last field so "FROM" doesn't follow ","
             if field_lines:
@@ -766,7 +750,7 @@ def scaffold(
     if not platform:
         console.print(
             "[red]Workspace platform not configured. "
-            "Run `antline init` with --db-type, --host, --port, --user, --password, --database.[/]"
+            "Run `antline init` with --db-type, --host, --port, --user, --password.[/]"
         )
         raise typer.Exit(1)
 
@@ -820,9 +804,7 @@ def scaffold(
 
     # Generate all dbt files
     _generate_dbt_project_yml(prj, dbt_dir)
-    _generate_dbt_profile(
-        prj, dbt_dir, target_db_type, host, port, user, password, target_db
-    )
+    _generate_dbt_profile(prj, dbt_dir, target_db_type, host, port, user, password, target_db)
     _generate_env_file(prj, state.root, password)
     _generate_sources_yml(prj, state, dbt_dir, used_tables, source_mode=source_mode)
     _generate_row_models(prj, state, dbt_dir, used_tables)
@@ -878,7 +860,9 @@ def scaffold(
 @app.command()
 def compile(
     prj_id: str = typer.Argument(..., help="Project ID"),
-    model: str = typer.Option("", "--model", "-m", help="指定模型名 (如 row_patients / map_patients)"),
+    model: str = typer.Option(
+        "", "--model", "-m", help="指定模型名 (如 row_patients / map_patients)"
+    ),
 ) -> None:
     """Compile dbt models to validate SQL syntax without executing.
 
@@ -1057,8 +1041,7 @@ def validate(
             report_lines.append("All tests passed successfully.")
         else:
             report_lines.append(
-                "Tests failed, but no detailed results could be extracted "
-                "from run_results.json."
+                "Tests failed, but no detailed results could be extracted from run_results.json."
             )
         report_lines.append("")
 

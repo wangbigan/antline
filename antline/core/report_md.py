@@ -23,7 +23,9 @@ def render_explore_report(report: SourceExploreReport) -> str:
 
     lines.append(f"# Source Explore Report: {report.source_id}")
     lines.append("")
-    lines.append(f"**Generated:** {report.generated_at.strftime('%Y-%m-%d %H:%M:%S')} (UTC+8 Beijing)")
+    lines.append(
+        f"**Generated:** {report.generated_at.strftime('%Y-%m-%d %H:%M:%S')} (UTC+8 Beijing)"
+    )
     lines.append("")
 
     # Summary
@@ -31,7 +33,9 @@ def render_explore_report(report: SourceExploreReport) -> str:
     lines.append("")
     lines.append("| Metric | Value |")
     lines.append("|--------|-------|")
-    lines.append(f"| Database | {summary.get('database', 'N/A')} ({summary.get('db_type', 'N/A')}) |")
+    lines.append(
+        f"| Database | {summary.get('database', 'N/A')} ({summary.get('db_type', 'N/A')}) |"
+    )
     lines.append(f"| Tables | {summary.get('total_tables', 0):,} |")
     lines.append(f"| Total Rows | {summary.get('total_rows', 0):,} |")
     lines.append(f"| Total Columns | {summary.get('total_columns', 0):,} |")
@@ -63,19 +67,17 @@ def render_explore_report(report: SourceExploreReport) -> str:
         # Columns table
         lines.append("#### Columns")
         lines.append("")
-        lines.append(
-            "| Column | Type | Nullable | Default | Comment | Nulls | Unique | Sample |"
-        )
-        lines.append(
-            "|--------|------|----------|---------|---------|-------|--------|--------|"
-        )
+        lines.append("| Column | Type | Nullable | Default | Comment | Nulls | Unique | Sample |")
+        lines.append("|--------|------|----------|---------|---------|-------|--------|--------|")
 
         for col in table.columns:
             nullable = "YES" if col.nullable else "NO"
             default = col.default or "-"
             comment = col.comment or "-"
             stats = col.stats
-            nulls = f"{stats.null_count:,} ({_pct(stats.null_rate)})" if stats.null_count > 0 else "0"
+            nulls = (
+                f"{stats.null_count:,} ({_pct(stats.null_rate)})" if stats.null_count > 0 else "0"
+            )
             unique = "✓" if stats.is_unique_candidate else "-"
             sample = _fmt_sample(col.sample_data)
             lines.append(

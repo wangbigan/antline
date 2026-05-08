@@ -89,7 +89,17 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
 
         # --- Step 1: init ---
         result = runner.invoke(
-            app, ["init", "--path", ".", "--name", "e2e-test", "--password", "test"]
+            app,
+            [
+                "init",
+                "--path",
+                ".",
+                "--name",
+                "e2e-test",
+                "--password",
+                "test",
+                "--no-test-connection",
+            ],
         )
         assert result.exit_code == 0, result.output
         assert (project_root / "antline.yml").exists()
@@ -164,9 +174,7 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
         assert (assessment_dir / "template.md").exists()
 
         # Simulate LLM generating assessment from template (Markdown + frontmatter)
-        template = yaml.safe_load(
-            (assessment_dir / "template.md").read_text().split("---")[1]
-        )
+        template = yaml.safe_load((assessment_dir / "template.md").read_text().split("---")[1])
         template["feasible"] = True
         for m in template["field_mappings"]:
             if m["target_field"] == "dim_patients.patient_id":
@@ -265,9 +273,7 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
         assert (project_root / "projects" / prj_id / "project.yml").exists()
 
         # Verify project references requirement
-        prj_data = yaml.safe_load(
-            (project_root / "projects" / prj_id / "project.yml").read_text()
-        )
+        prj_data = yaml.safe_load((project_root / "projects" / prj_id / "project.yml").read_text())
         assert prj_data["name"] == "患者数据项目"
         assert req_id in prj_data["requirement_ids"]
         assert len(prj_data["qc_rules"]) > 0
