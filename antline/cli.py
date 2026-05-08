@@ -12,6 +12,7 @@ from rich.table import Table
 from antline.commands import project, requirement, schema, source
 from antline.core.config import CONFIG_FILE, ProjectState
 from antline.core.git import ensure_gitignore, git_add_all, git_commit, git_init, is_git_repo
+from antline.core.models import DataSourceType
 
 app = typer.Typer(
     name="antline",
@@ -50,10 +51,13 @@ DEFAULT_CONFIG = {
         "name": "",
         "description": "",
     },
-    "dbt": {
-        "project_dir": "./dbt",
-        "profiles_dir": "~/.dbt",
-        "target": "dev",
+    "platform": {
+        "db_type": "postgresql",
+        "host": "localhost",
+        "port": 5432,
+        "user": "",
+        "password": "",
+        "database": "",
     },
     "paths": {
         "sources": "sources",
@@ -68,9 +72,17 @@ DEFAULT_CONFIG = {
 def init(
     path: Path = typer.Option(".", "--path", "-p", help="Directory to initialize the project in"),
     name: str = typer.Option("", "--name", "-n", help="Project name"),
+    db_type: DataSourceType = typer.Option(
+        DataSourceType.POSTGRESQL, "--db-type", "-t", help="Target database type"
+    ),
+    host: str = typer.Option("localhost", "--host", "-h", help="Database host"),
+    port: int = typer.Option(5432, "--port", "-P", help="Database port"),
+    user: str = typer.Option("", "--user", "-u", help="Database user"),
+    password: str = typer.Option("", "--password", prompt=True, hide_input=True, help="Database password"),
+    database: str = typer.Option("", "--database", "-d", help="Default database name"),
     force: bool = typer.Option(False, "--force", help="Overwrite existing config"),
 ) -> None:
-    """Initialize a new Antline project."""
+    """Initialize a new Antline workspace with platform configuration."""
     root = path.resolve()
     root.mkdir(parents=True, exist_ok=True)
 
@@ -81,6 +93,14 @@ def init(
 
     config = DEFAULT_CONFIG.copy()
     config["project"]["name"] = name or root.name
+    config["platform"] = {
+        "db_type": db_type.value,
+        "host": host,
+        "port": port,
+        "user": user,
+        "password": password,
+        "database": database or root.name.replace("-", "_").lower(),
+    }
 
     with open(config_path, "w", encoding="utf-8") as f:
         yaml.dump(config, f, sort_keys=False, allow_unicode=True)
@@ -102,8 +122,9 @@ def init(
     git_add_all(root)
     git_commit("chore: initialize antline project", root)
 
-    console.print(f"[green]Initialized Antline project:[/] {root}")
+    console.print(f"[green]Initialized Antline workspace:[/] {root}")
     console.print(f"  Config: {config_path}")
+    console.print(f"  Platform: {db_type.value} @ {host}:{port}/{database or root.name}")
     console.print(f"  Run `cd {root.name}` to start working.")
 
 

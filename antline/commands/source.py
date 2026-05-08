@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import typer
 import yaml
 from rich.console import Console
 from rich.table import Table
 from sqlalchemy import text
 
-from antline.core.config import REPORTS_DIR, ProjectState
+from antline.core.config import ProjectState
 from antline.core.db import explore_source, get_engine
 from antline.core.git import git_add_all, git_commit
 from antline.core.models import DataSource, DataSourceType, SourceExploreReport
@@ -69,7 +67,7 @@ def add(
             if "does not exist" in error_msg or ("database" in error_msg and "exist" in error_msg):
                 console.print(f"[red]failed[/]\n  Database '{database}' does not exist on {host}:{port}")
             elif "authentication" in error_msg or "password" in error_msg:
-                console.print(f"[red]failed[/]\n  Authentication failed — check user/password")
+                console.print("[red]failed[/]\n  Authentication failed — check user/password")
             elif "connection" in error_msg or "refused" in error_msg or "timeout" in error_msg:
                 console.print(f"[red]failed[/]\n  Cannot connect to {host}:{port} — check host/port")
             else:
@@ -132,16 +130,16 @@ def explore(
     console.print(f"[bold]Exploring[/] {source_id} ({source.name}) …")
     report = explore_source(source, max_tables=max_tables, mask_sensitive=not no_mask)
 
-    report_dir = state.root / REPORTS_DIR
-    report_dir.mkdir(parents=True, exist_ok=True)
+    explore_dir = state.root / "sources" / source_id / "explore"
+    explore_dir.mkdir(parents=True, exist_ok=True)
 
     # Save structured YAML for agents
-    yml_path = report_dir / f"{source_id}_explore.yml"
+    yml_path = explore_dir / "report.yml"
     with open(yml_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(report.model_dump(mode="json"), f, sort_keys=False, allow_unicode=True)
 
     # Save Markdown for human reading
-    md_path = report_dir / f"{source_id}_explore.md"
+    md_path = explore_dir / "report.md"
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(render_explore_report(report))
 
@@ -154,7 +152,7 @@ def explore(
     else:
         _print_explore_summary(report)
 
-    console.print(f"\n[green]Reports saved:[/]")
+    console.print("\n[green]Reports saved:[/]")
     console.print(f"  YAML (agent): {yml_path}")
     console.print(f"  Markdown (human): {md_path}")
 

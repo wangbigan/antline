@@ -184,11 +184,10 @@ def assess(
         generate_human_guide,
         generate_llm_prompt,
     )
-    from antline.core.config import REPORTS_DIR
 
     reports: list[SourceExploreReport] = []
     for sid in source_ids:
-        report_path = state.root / REPORTS_DIR / f"{sid}_explore.yml"
+        report_path = state.root / "sources" / sid / "explore" / "report.yml"
         if report_path.exists():
             data = yaml.safe_load(report_path.read_text())
             if data:
@@ -200,12 +199,12 @@ def assess(
         )
 
     # Generate output files
-    assessment_dir = state.root / "reports" / "assessment"
+    assessment_dir = state.root / "requirements" / req_id / "assessment"
     assessment_dir.mkdir(parents=True, exist_ok=True)
 
-    prompt_path = assessment_dir / f"{req_id}_prompt.md"
-    guide_path = assessment_dir / f"{req_id}_guide.md"
-    template_path = assessment_dir / f"{req_id}_template.md"
+    prompt_path = assessment_dir / "prompt.md"
+    guide_path = assessment_dir / "guide.md"
+    template_path = assessment_dir / "template.md"
 
     with open(prompt_path, "w", encoding="utf-8") as f:
         f.write(generate_llm_prompt(req, reports, focus_tables, full_stats))
@@ -223,11 +222,11 @@ def assess(
     git_add_all(state.root)
     git_commit(f"feat(requirement): assess {req_id} (prompts generated)", state.root)
 
-    console.print(f"\n[green]评估材料已生成:[/]")
+    console.print("\n[green]评估材料已生成:[/]")
     console.print(f"  LLM 提示词:  {prompt_path}")
     console.print(f"  人工指南:    {guide_path}")
     console.print(f"  评估模板:    {template_path}")
-    console.print(f"\n[yellow]下一步操作:[/]")
+    console.print("\n[yellow]下一步操作:[/]")
     console.print("  1. 将 prompt.md 的内容复制给大模型，获取评估结果")
     console.print("  2. 人工审核修改后，保存为 assessment.md")
     console.print(f"  3. 审批通过: [bold]antline requirement approve {req_id}[/]")
@@ -267,7 +266,7 @@ def approve(
 
     # Determine assessment file path (default to .md)
     if assessment_file is None:
-        assessment_file = state.root / "reports" / "assessment" / f"{req_id}_assessment.md"
+        assessment_file = state.root / "requirements" / req_id / "assessment" / "assessment.md"
 
     if not assessment_file.exists():
         console.print(

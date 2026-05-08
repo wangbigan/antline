@@ -18,13 +18,17 @@ def temp_project():
         yield root
 
 
+from datetime import date
+
+
 def test_next_source_id(temp_project):
     state = ProjectState(temp_project)
-    assert state.next_source_id() == "SRC-001"
+    today = date.today().strftime("%Y%m%d")
+    assert state.next_source_id() == f"SRC-{today}-001"
 
     state.save_source(
         DataSource(
-            id="SRC-001",
+            id=f"SRC-{today}-001",
             name="s1",
             db_type=DataSourceType.POSTGRESQL,
             host="h",
@@ -33,7 +37,7 @@ def test_next_source_id(temp_project):
             user="u",
         )
     )
-    assert state.next_source_id() == "SRC-002"
+    assert state.next_source_id() == f"SRC-{today}-002"
 
 
 def test_list_sources_empty(temp_project):

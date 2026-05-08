@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tempfile
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,8 @@ from antline.cli import app
 from antline.core import db as db_module
 
 runner = CliRunner()
+
+TODAY = date.today().strftime("%Y%m%d")
 
 
 @pytest.fixture
@@ -85,7 +88,9 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
         monkeypatch.chdir(project_root)
 
         # --- Step 1: init ---
-        result = runner.invoke(app, ["init", "--path", ".", "--name", "e2e-test"])
+        result = runner.invoke(
+            app, ["init", "--path", ".", "--name", "e2e-test", "--password", "test"]
+        )
         assert result.exit_code == 0, result.output
         assert (project_root / "antline.yml").exists()
 
@@ -109,15 +114,16 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
             ],
         )
         assert result.exit_code == 0, result.output
-        assert (project_root / "sources" / "SRC-001.yml").exists()
+        src_id = f"SRC-{TODAY}-001"
+        assert (project_root / "sources" / src_id / "source.yml").exists()
 
         # --- Step 3: source explore (mock engine to use SQLite) ---
         engine = create_engine(f"sqlite:///{sqlite_db}")
         monkeypatch.setattr(db_module, "get_engine", lambda _source: engine)
 
-        result = runner.invoke(app, ["source", "explore", "SRC-001"])
+        result = runner.invoke(app, ["source", "explore", src_id])
         assert result.exit_code == 0, result.output
-        assert (project_root / "reports" / "SRC-001_explore.yml").exists()
+        assert (project_root / "sources" / src_id / "explore" / "report.yml").exists()
 
         # --- Step 4: requirement create with target schema ---
         schema_path = project_root / "target_schema" / "dim_patients.yaml"
@@ -137,26 +143,29 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
             ],
         )
         assert result.exit_code == 0, result.output
-        assert (project_root / "requirements" / "REQ-001.yml").exists()
+        req_id = f"REQ-{TODAY}-001"
+        assert (project_root / "requirements" / req_id / "requirement.yml").exists()
 
         # Verify requirement loaded the schema
-        req_data = yaml.safe_load((project_root / "requirements" / "REQ-001.yml").read_text())
+        req_data = yaml.safe_load(
+            (project_root / "requirements" / req_id / "requirement.yml").read_text()
+        )
         assert req_data["target_schemas"][0]["table"] == "dim_patients"
         assert len(req_data["target_schemas"][0]["fields"]) == 4
 
         # --- Step 5: requirement assess (generates prompts/template) ---
-        result = runner.invoke(app, ["requirement", "assess", "REQ-001", "SRC-001"])
+        result = runner.invoke(app, ["requirement", "assess", req_id, src_id])
         assert result.exit_code == 0, result.output
 
         # Verify prompt/template files generated
-        assessment_dir = project_root / "reports" / "assessment"
-        assert (assessment_dir / "REQ-001_prompt.md").exists()
-        assert (assessment_dir / "REQ-001_guide.md").exists()
-        assert (assessment_dir / "REQ-001_template.md").exists()
+        assessment_dir = project_root / "requirements" / req_id / "assessment"
+        assert (assessment_dir / "prompt.md").exists()
+        assert (assessment_dir / "guide.md").exists()
+        assert (assessment_dir / "template.md").exists()
 
         # Simulate LLM generating assessment from template (Markdown + frontmatter)
         template = yaml.safe_load(
-            (assessment_dir / "REQ-001_template.md").read_text().split("---")[1]
+            (assessment_dir / "template.md").read_text().split("---")[1]
         )
         template["feasible"] = True
         for m in template["field_mappings"]:
@@ -185,7 +194,7 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
 {frontmatter.rstrip()}
 ---
 
-# 可行性评估报告：REQ-001
+# 可行性评估报告：{req_id}
 
 ## 结论
 可行性：是
@@ -207,7 +216,7 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
 
 测试评估报告
 """
-        assessment_path = assessment_dir / "REQ-001_assessment.md"
+        assessment_path = assessment_dir / "assessment.md"
         with open(assessment_path, "w", encoding="utf-8") as f:
             f.write(assessment_md)
 
@@ -217,7 +226,7 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
             [
                 "requirement",
                 "approve",
-                "REQ-001",
+                req_id,
                 "--file",
                 str(assessment_path),
             ],
@@ -225,7 +234,9 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
         assert result.exit_code == 0, result.output
 
         # Verify assessment stored in requirement
-        req_data = yaml.safe_load((project_root / "requirements" / "REQ-001.yml").read_text())
+        req_data = yaml.safe_load(
+            (project_root / "requirements" / req_id / "requirement.yml").read_text()
+        )
         assert req_data["status"] == "approved"
         assert req_data["assessment"]["feasible"] is True
         assert len(req_data["assessment"]["field_mappings"]) == 4
@@ -246,16 +257,19 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
                 "--name",
                 "患者数据项目",
                 "--requirement",
-                "REQ-001",
+                req_id,
             ],
         )
         assert result.exit_code == 0, result.output
-        assert (project_root / "projects" / "PRJ-001.yml").exists()
+        prj_id = f"PRJ-{TODAY}-001"
+        assert (project_root / "projects" / prj_id / "project.yml").exists()
 
         # Verify project references requirement
-        prj_data = yaml.safe_load((project_root / "projects" / "PRJ-001.yml").read_text())
+        prj_data = yaml.safe_load(
+            (project_root / "projects" / prj_id / "project.yml").read_text()
+        )
         assert prj_data["name"] == "患者数据项目"
-        assert "REQ-001" in prj_data["requirement_ids"]
+        assert req_id in prj_data["requirement_ids"]
         assert len(prj_data["qc_rules"]) > 0
 
         # --- Step 7: project scaffold ---
@@ -264,24 +278,14 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
             [
                 "project",
                 "scaffold",
-                "PRJ-001",
-                "--db-type",
-                "postgresql",
-                "--host",
-                "localhost",
-                "--port",
-                "5432",
-                "--user",
-                "postgres",
-                "--password",
-                "test",
+                prj_id,
                 "--skip-db-setup",
             ],
         )
         assert result.exit_code == 0, result.output
 
         # Verify dbt project structure (per-project dbt dir)
-        dbt_dir = project_root / "dbt" / "PRJ-001"
+        dbt_dir = project_root / "projects" / prj_id / "dbt"
         assert (dbt_dir / "dbt_project.yml").exists()
         assert (dbt_dir / "profiles.yml").exists()
         assert (dbt_dir / "models" / "row").exists()
@@ -290,7 +294,7 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
         assert (dbt_dir / "models" / "sources.yml").exists()
 
         # Verify env file created
-        assert (project_root / ".env.prj-001").exists()
+        assert (project_root / "projects" / prj_id / ".env").exists()
 
         # Verify map model references target fields
         map_model = dbt_dir / "models" / "map" / "map_dim_patients.sql"

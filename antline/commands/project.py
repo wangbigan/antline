@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 import typer
 import yaml
@@ -14,14 +15,11 @@ from rich.table import Table
 from antline.core.config import ProjectState
 from antline.core.git import git_add_all, git_commit
 from antline.core.models import (
-    DataSourceType,
     FieldMapping,
     Project,
     ProjectStatus,
     ProjectVersion,
     QCRule,
-    Requirement,
-    RequirementAssessment,
     RequirementStatus,
     SourceExploreReport,
 )
@@ -47,11 +45,9 @@ def _dbt_safe_name(name: str) -> str:
 
 def _load_explore_reports(state: ProjectState, source_ids: list[str]) -> dict[str, SourceExploreReport]:
     """Load explore reports for the given source IDs."""
-    from antline.core.config import REPORTS_DIR
-
     reports: dict[str, SourceExploreReport] = {}
     for sid in source_ids:
-        report_path = state.root / REPORTS_DIR / f"{sid}_explore.yml"
+        report_path = state.root / "sources" / sid / "explore" / "report.yml"
         if report_path.exists():
             data = yaml.safe_load(report_path.read_text())
             if data:
@@ -259,7 +255,7 @@ def _generate_env_file(
 ) -> Path:
     """Generate a .env helper file with the DBT password."""
     env_var_name = f"DBT_PASSWORD_{project.id.replace('-', '_')}"
-    path = root / f".env.{project.id.lower()}"
+    path = root / "projects" / project.id / ".env"
     content = f"## Antline project {project.id} database password\n"
     content += f"## Load with: set -a && source {path.name} && set +a\n\n"
     content += f"{env_var_name}={password}\n"
@@ -395,7 +391,7 @@ def _generate_fdw_script(
                 [
                     f"-- Source: {sid} ({src.name}) -> {src.database}",
                     f"CREATE SERVER IF NOT EXISTS {q_server}",
-                    f"  FOREIGN DATA WRAPPER postgres_fdw",
+                    "  FOREIGN DATA WRAPPER postgres_fdw",
                     f"  OPTIONS (host '{src.host}', dbname '{src.database}', port '{src.port}');",
                     f"CREATE USER MAPPING IF NOT EXISTS FOR CURRENT_USER SERVER {q_server}",
                     f"  OPTIONS (user '{src.user}', password '{src.password or ''}');",
@@ -730,14 +726,6 @@ def show(
 @app.command()
 def scaffold(
     prj_id: str = typer.Argument(..., help="Project ID"),
-    db_type: str = typer.Option(
-        "postgresql", "--db-type", prompt="目标数据库类型 (postgresql/mysql/tidb)"
-    ),
-    host: str = typer.Option("localhost", "--host", "-h", prompt="数据库地址"),
-    port: int = typer.Option(5432, "--port", "-p", prompt="端口"),
-    user: str = typer.Option("postgres", "--user", "-u", prompt="用户名"),
-    password: str = typer.Option(..., "--password", prompt="密码", hide_input=True),
-    db_name: str = typer.Option("", "--db-name", help="数据库名 (默认: 项目编号, - 替换为 _)"),
     skip_db_setup: bool = typer.Option(
         False, "--skip-db-setup", help="跳过数据库创建和校验 (用于测试)"
     ),
@@ -748,6 +736,8 @@ def scaffold(
     ),
 ) -> None:
     """Generate dbt project scaffolding from approved requirement assessments.
+
+    Uses the workspace-level platform configuration (set during `antline init`).
 
     Automatically generates:
     - sources.yml with tables referenced in field mappings
@@ -771,11 +761,26 @@ def scaffold(
         console.print(f"[red]Project not found:[/] {prj_id}")
         raise typer.Exit(1)
 
-    # Normalize database name
+    # Read workspace platform config
+    platform = state.workspace_platform()
+    if not platform:
+        console.print(
+            "[red]Workspace platform not configured. "
+            "Run `antline init` with --db-type, --host, --port, --user, --password, --database.[/]"
+        )
+        raise typer.Exit(1)
+
+    db_type = platform.get("db_type", "postgresql")
+    host = platform.get("host", "localhost")
+    port = platform.get("port", 5432)
+    user = platform.get("user", "")
+    password = platform.get("password", "")
+    db_name = platform.get("database", "")
     target_db = db_name or prj_id.replace("-", "_").lower()
     target_db_type = db_type.lower()
 
     console.print(f"[bold]Scaffolding[/] dbt project for {prj_id} …")
+    console.print(f"  Platform: {db_type} @ {host}:{port}/{target_db}")
 
     # Validate / create target database
     if not skip_db_setup:
@@ -810,8 +815,8 @@ def scaffold(
             "Scaffold will generate placeholder models."
         )
 
-    # Per-project dbt directory
-    dbt_dir = state.root / "dbt" / prj_id
+    # Per-project dbt directory under projects/
+    dbt_dir = state.root / "projects" / prj_id / "dbt"
 
     # Generate all dbt files
     _generate_dbt_project_yml(prj, dbt_dir)
@@ -841,7 +846,7 @@ def scaffold(
     console.print(f"  row/ models: {total_row}")
     console.print(f"  map/ models: {total_map}")
     console.print(f"  clean/ models: {total_map}")
-    env_path = state.root / f".env.{prj_id.lower()}"
+    env_path = state.root / "projects" / prj_id / ".env"
     console.print(f"  env file: {env_path}")
     if fdw_script:
         console.print(f"  fdw script: {fdw_script}")
@@ -1006,7 +1011,9 @@ def validate(
             pass  # If parsing fails, fall back to basic report
 
     # Generate detailed QC report
-    report_path = state.root / "reports" / f"{prj_id}_qc.md"
+    qc_dir = state.root / "projects" / prj_id / "qc"
+    qc_dir.mkdir(parents=True, exist_ok=True)
+    report_path = qc_dir / "report.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     status = "PASSED" if result.returncode == 0 else "FAILED"
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")

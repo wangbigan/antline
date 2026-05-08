@@ -40,8 +40,9 @@ def ensure_gitignore(path: Path | None = None) -> None:
     cwd = path or Path.cwd()
     gitignore = cwd / ".gitignore"
     content = """# Antline — never commit sensitive connection passwords
-sources/*.yml
-!sources/.gitkeep
+sources/*/source.yml
+requirements/*/requirement.yml
+projects/*/.env
 
 # Python
 __pycache__/
@@ -53,12 +54,11 @@ build/
 # Reports (generated)
 reports/*.html
 reports/*.csv
-reports/assessment/*.yaml
 
 # dbt
-dbt/target/
-dbt/dbt_packages/
-dbt/logs/
+projects/*/dbt/target/
+projects/*/dbt/dbt_packages/
+projects/*/dbt/logs/
 """
     if not gitignore.exists():
         gitignore.write_text(content)

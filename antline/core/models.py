@@ -17,6 +17,19 @@ class DataSourceType(str, Enum):
     TIDB = "tidb"
 
 
+class WorkspacePlatformConfig(BaseModel):
+    """Target database platform configuration at workspace level."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    db_type: DataSourceType
+    host: str
+    port: int
+    user: str
+    password: str | None = None
+    database: str
+
+
 class FieldStats(BaseModel):
     """Statistics for a single column."""
 

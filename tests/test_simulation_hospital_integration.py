@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import random
 import tempfile
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -31,6 +31,7 @@ from antline.cli import app
 from antline.core import db as db_module
 
 runner = CliRunner()
+TODAY = date.today().strftime("%Y%m%d")
 
 # ---------------------------------------------------------------------------
 # Data generators
@@ -324,7 +325,9 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
     monkeypatch.chdir(project_root)
 
     # --- Step 1: init ---
-    result = runner.invoke(app, ["init", "--path", ".", "--name", "hospital-integration"])
+    result = runner.invoke(
+        app, ["init", "--path", ".", "--name", "hospital-integration", "--password", "test"]
+    )
     assert result.exit_code == 0, result.output
 
     # --- Step 2: add HIS source ---
@@ -349,7 +352,7 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
         ],
     )
     assert result.exit_code == 0, result.output
-    his_id = "SRC-001"
+    his_id = f"SRC-{TODAY}-001"
 
     # --- Step 3: add EMR source ---
     result = runner.invoke(
@@ -373,7 +376,7 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
         ],
     )
     assert result.exit_code == 0, result.output
-    emr_id = "SRC-002"
+    emr_id = f"SRC-{TODAY}-002"
 
     # --- Step 4: explore both sources ---
     his_engine = create_engine(f"sqlite:///{hospital_dbs['his']}")
@@ -389,16 +392,20 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
     for sid in [his_id, emr_id]:
         result = runner.invoke(app, ["source", "explore", sid])
         assert result.exit_code == 0, result.output
-        assert (project_root / "reports" / f"{sid}_explore.yml").exists()
+        assert (project_root / "sources" / sid / "explore" / "report.yml").exists()
 
     # Verify explore reports contain expected tables
-    his_report = yaml.safe_load((project_root / "reports" / f"{his_id}_explore.yml").read_text())
+    his_report = yaml.safe_load(
+        (project_root / "sources" / his_id / "explore" / "report.yml").read_text()
+    )
     his_tables = {t["name"] for t in his_report["tables"]}
     assert "patient_info" in his_tables
     assert "admission_records" in his_tables
     assert his_report["summary"]["total_tables"] == 3
 
-    emr_report = yaml.safe_load((project_root / "reports" / f"{emr_id}_explore.yml").read_text())
+    emr_report = yaml.safe_load(
+        (project_root / "sources" / emr_id / "explore" / "report.yml").read_text()
+    )
     emr_tables = {t["name"] for t in emr_report["tables"]}
     assert "diagnoses" in emr_tables
     assert "medication_orders" in emr_tables
@@ -424,7 +431,7 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
         ],
     )
     assert result.exit_code == 0, result.output
-    req_patients = "REQ-001"
+    req_patients = f"REQ-{TODAY}-001"
 
     result = runner.invoke(
         app,
@@ -438,7 +445,7 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
         ],
     )
     assert result.exit_code == 0, result.output
-    req_admissions = "REQ-002"
+    req_admissions = f"REQ-{TODAY}-002"
 
     # --- Step 6: assess (generates prompts/template) + simulate completion + approve ---
     for req_id in [req_patients, req_admissions]:
@@ -446,7 +453,8 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
         assert result.exit_code == 0, result.output
 
         # Simulate LLM generating assessment from template (Markdown + frontmatter)
-        template_path = project_root / "reports" / "assessment" / f"{req_id}_template.md"
+        assessment_dir = project_root / "requirements" / req_id / "assessment"
+        template_path = assessment_dir / "template.md"
         template = yaml.safe_load(
             template_path.read_text().split("---")[1]
         )
@@ -504,7 +512,7 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
 
 测试评估报告
 """
-        assessment_path = project_root / "reports" / "assessment" / f"{req_id}_assessment.md"
+        assessment_path = assessment_dir / "assessment.md"
         with open(assessment_path, "w", encoding="utf-8") as f:
             f.write(assessment_md)
 
@@ -515,7 +523,9 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
         assert result.exit_code == 0, result.output
 
     # Verify patient requirement mappings
-    req_data = yaml.safe_load((project_root / "requirements" / f"{req_patients}.yml").read_text())
+    req_data = yaml.safe_load(
+        (project_root / "requirements" / req_patients / "requirement.yml").read_text()
+    )
     assert req_data["status"] == "approved"
     mappings = {m["target_field"]: m for m in req_data["assessment"]["field_mappings"]}
 
@@ -528,7 +538,9 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
     assert mappings["patients.dod"]["mapping_type"] == "missing"
 
     # Verify admission requirement mappings
-    req_data = yaml.safe_load((project_root / "requirements" / f"{req_admissions}.yml").read_text())
+    req_data = yaml.safe_load(
+        (project_root / "requirements" / req_admissions / "requirement.yml").read_text()
+    )
     mappings = {m["target_field"]: m for m in req_data["assessment"]["field_mappings"]}
     assert mappings["admissions.subject_id"]["mapping_type"] == "direct"
     assert mappings["admissions.hadm_id"]["mapping_type"] == "direct"
@@ -550,9 +562,11 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
         ],
     )
     assert result.exit_code == 0, result.output
-    prj_id = "PRJ-001"
+    prj_id = f"PRJ-{TODAY}-001"
 
-    prj_data = yaml.safe_load((project_root / "projects" / f"{prj_id}.yml").read_text())
+    prj_data = yaml.safe_load(
+        (project_root / "projects" / prj_id / "project.yml").read_text()
+    )
     assert prj_data["name"] == "医院数据集成项目"
     assert set(prj_data["requirement_ids"]) == {req_patients, req_admissions}
     assert len(prj_data["qc_rules"]) == 2  # one per target table
@@ -564,22 +578,12 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
             "project",
             "scaffold",
             prj_id,
-            "--db-type",
-            "postgresql",
-            "--host",
-            "localhost",
-            "--port",
-            "5432",
-            "--user",
-            "postgres",
-            "--password",
-            "test",
             "--skip-db-setup",
         ],
     )
     assert result.exit_code == 0, result.output
 
-    dbt_dir = project_root / "dbt" / prj_id
+    dbt_dir = project_root / "projects" / prj_id / "dbt"
     assert (dbt_dir / "dbt_project.yml").exists()
     assert (dbt_dir / "models" / "map" / "map_patients.sql").exists()
     assert (dbt_dir / "models" / "map" / "map_admissions.sql").exists()

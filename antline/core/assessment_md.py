@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from antline.core.models import Requirement, RequirementAssessment
+from antline.core.models import Requirement
 
 
 def render_assessment_report(req: Requirement) -> str:
