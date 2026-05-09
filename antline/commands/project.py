@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -41,6 +42,20 @@ def _dbt_safe_name(name: str) -> str:
     if not safe:
         safe = "project"
     return safe
+
+
+def _get_dbt_env(prj_id: str, platform: dict[str, Any] | None) -> dict[str, str]:
+    """Build environment dict for dbt subprocess with password injected.
+
+    Profiles.yml references passwords via env_var. This ensures the workspace
+    platform password is available without a manual .env file.
+    """
+    env = dict(os.environ)
+    if platform:
+        password = platform.get("password", "")
+        env_var_name = f"DBT_PASSWORD_{prj_id.replace('-', '_')}"
+        env[env_var_name] = password
+    return env
 
 
 def _load_explore_reports(
@@ -243,22 +258,6 @@ def _generate_dbt_profile(
     path = dbt_dir / "profiles.yml"
     with open(path, "w", encoding="utf-8") as f:
         yaml.dump(profile, f, sort_keys=False, allow_unicode=True)
-    return path
-
-
-def _generate_env_file(
-    project: Project,
-    root: Path,
-    password: str,
-) -> Path:
-    """Generate a .env helper file with the DBT password."""
-    env_var_name = f"DBT_PASSWORD_{project.id.replace('-', '_')}"
-    path = root / "projects" / project.id / ".env"
-    content = f"## Antline project {project.id} database password\n"
-    content += f"## Load with: set -a && source {path.name} && set +a\n\n"
-    content += f"{env_var_name}={password}\n"
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(content)
     return path
 
 
@@ -805,7 +804,6 @@ def scaffold(
     # Generate all dbt files
     _generate_dbt_project_yml(prj, dbt_dir)
     _generate_dbt_profile(prj, dbt_dir, target_db_type, host, port, user, password, target_db)
-    _generate_env_file(prj, state.root, password)
     _generate_sources_yml(prj, state, dbt_dir, used_tables, source_mode=source_mode)
     _generate_row_models(prj, state, dbt_dir, used_tables)
     _generate_map_models(prj, state, dbt_dir, req_mappings)
@@ -828,8 +826,6 @@ def scaffold(
     console.print(f"  row/ models: {total_row}")
     console.print(f"  map/ models: {total_map}")
     console.print(f"  clean/ models: {total_map}")
-    env_path = state.root / "projects" / prj_id / ".env"
-    console.print(f"  env file: {env_path}")
     if fdw_script:
         console.print(f"  fdw script: {fdw_script}")
     console.print("\n  Next steps:")
@@ -839,22 +835,19 @@ def scaffold(
         console.print("  2. Review dbt/models/sources.yml — verify table references")
         console.print("  3. Review dbt/models/map/*.sql — adjust transform/missing mappings")
         console.print("  4. Implement dbt/models/clean/*.sql — add type casting & cleaning")
-        console.print(f"  5. Source env: set -a && source {env_path} && set +a")
-        console.print(f"  6. Run dbt build from: {dbt_dir}")
+        console.print(f"  5. Run dbt build from: {dbt_dir}")
     elif source_mode == "sync":
         console.print("  1. Run extract job to sync source data into target DB ODS layer")
         console.print("     (row layer expects tables in ods_<source_id> schemas)")
         console.print("  2. Review dbt/models/sources.yml — verify table references")
         console.print("  3. Review dbt/models/map/*.sql — adjust transform/missing mappings")
         console.print("  4. Implement dbt/models/clean/*.sql — add type casting & cleaning")
-        console.print(f"  5. Source env: set -a && source {env_path} && set +a")
-        console.print(f"  6. Run dbt build from: {dbt_dir}")
+        console.print(f"  5. Run dbt build from: {dbt_dir}")
     else:
         console.print("  1. Review dbt/models/sources.yml — verify table references")
         console.print("  2. Review dbt/models/map/*.sql — adjust transform/missing mappings")
         console.print("  3. Implement dbt/models/clean/*.sql — add type casting & cleaning")
-        console.print(f"  4. Source env: set -a && source {env_path} && set +a")
-        console.print(f"  5. Run dbt build from: {dbt_dir}")
+        console.print(f"  4. Run dbt build from: {dbt_dir}")
 
 
 @app.command()
@@ -876,7 +869,7 @@ def compile(
         console.print(f"[red]Project not found:[/] {prj_id}")
         raise typer.Exit(1)
 
-    dbt_dir = state.root / "dbt" / prj_id
+    dbt_dir = state.root / "projects" / prj_id / "dbt"
     if not (dbt_dir / "dbt_project.yml").exists():
         console.print(
             f"[red]No dbt project found. Run `antline project scaffold {prj_id}` first.[/]"
@@ -890,7 +883,9 @@ def compile(
         cmd.extend(["--select", model])
 
     console.print(f"[bold]Compiling[/] {prj_id} …")
-    result = subprocess.run(cmd, cwd=dbt_dir, capture_output=False)
+    result = subprocess.run(
+        cmd, cwd=dbt_dir, capture_output=False, env=_get_dbt_env(prj_id, state.workspace_platform())
+    )
 
     if result.returncode == 0:
         console.print(f"[green]Compile successful:[/] {prj_id}")
@@ -911,7 +906,7 @@ def build(
         console.print(f"[red]Project not found:[/] {prj_id}")
         raise typer.Exit(1)
 
-    dbt_dir = state.root / "dbt" / prj_id
+    dbt_dir = state.root / "projects" / prj_id / "dbt"
     if not (dbt_dir / "dbt_project.yml").exists():
         console.print(
             f"[red]No dbt project found. Run `antline project scaffold {prj_id}` first.[/]"
@@ -925,6 +920,7 @@ def build(
         ["dbt", "build"],
         cwd=dbt_dir,
         capture_output=False,
+        env=_get_dbt_env(prj_id, state.workspace_platform()),
     )
 
     vid = version or f"v{len(prj.versions) + 1}.0.0"
@@ -957,7 +953,7 @@ def validate(
         console.print(f"[red]Project not found:[/] {prj_id}")
         raise typer.Exit(1)
 
-    dbt_dir = state.root / "dbt" / prj_id
+    dbt_dir = state.root / "projects" / prj_id / "dbt"
     if not (dbt_dir / "dbt_project.yml").exists():
         console.print("[red]No dbt project found. Run scaffold first.[/]")
         raise typer.Exit(1)
@@ -971,6 +967,7 @@ def validate(
         ["dbt", "test"],
         cwd=dbt_dir,
         capture_output=False,
+        env=_get_dbt_env(prj_id, state.workspace_platform()),
     )
 
     # Parse run_results.json for all test results

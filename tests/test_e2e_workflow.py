@@ -299,9 +299,6 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
         assert (dbt_dir / "models" / "clean").exists()
         assert (dbt_dir / "models" / "sources.yml").exists()
 
-        # Verify env file created
-        assert (project_root / "projects" / prj_id / ".env").exists()
-
         # Verify map model references target fields
         map_model = dbt_dir / "models" / "map" / "map_dim_patients.sql"
         assert map_model.exists()
