@@ -751,7 +751,7 @@ def scaffold(
         "", "--user", "-u", help="Database user (defaults to workspace platform user)"
     ),
     password: str = typer.Option(
-        "", "--password", prompt=True, hide_input=True, help="Database password"
+        "", "--password", help="Database password"
     ),
 ) -> None:
     """Generate dbt project scaffolding from approved requirement assessments.
@@ -799,14 +799,13 @@ def scaffold(
     target_db = db_name or prj_id.replace("-", "_").lower()
     target_db_type = db_type.lower()
 
-    # Validate credentials before any DB operation
+    # Prompt for credentials when needed (before any DB operation)
     if not skip_db_setup:
         if not resolved_user:
-            console.print(
-                "[red]Database user is required. "
-                "Pass --user or configure it in the workspace (antline init --user).[/]"
-            )
-            raise typer.Exit(1)
+            resolved_user = typer.prompt("Database user")
+        if not resolved_password:
+            resolved_password = typer.prompt("Database password", hide_input=True)
+
         console.print(f"[dim]Validating credentials for {resolved_user}@{host}:{port} …[/]")
         try:
             _validate_db_credentials(
