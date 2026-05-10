@@ -706,6 +706,36 @@ def show(
             console.print(f"    {v.id} — {status}")
 
 
+def _validate_db_credentials(
+    db_type: str, host: str, port: int, user: str, password: str, db_name: str | None = None
+) -> None:
+    """Validate database credentials by attempting a connection.
+
+    If db_name is provided, connect directly to it. Otherwise connect to
+    the admin database (postgres/mysql) to verify credentials only.
+    """
+    from sqlalchemy import create_engine, text
+
+    if db_type == "postgresql":
+        target = db_name or "postgres"
+        conn_str = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{target}"
+    elif db_type in ("mysql", "tidb"):
+        target = db_name or "mysql"
+        conn_str = f"mysql+pymysql://{user}:{password}@{host}:{port}/{target}"
+    else:
+        return
+
+    try:
+        engine = create_engine(conn_str, connect_args={"connect_timeout": 5})
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        raise ConnectionError(
+            f"Could not connect to {db_type} at {host}:{port} "
+            f"(user={user}, db={target}): {exc}"
+        ) from exc
+
+
 @app.command()
 def scaffold(
     prj_id: str = typer.Argument(..., help="Project ID"),
@@ -716,6 +746,12 @@ def scaffold(
         "fdw",
         "--source-mode",
         help="Row 层引用源表方式: fdw (外联表, 默认) / sync (物理同步)",
+    ),
+    user: str = typer.Option(
+        "", "--user", "-u", help="Database user (defaults to workspace platform user)"
+    ),
+    password: str = typer.Option(
+        "", "--password", prompt=True, hide_input=True, help="Database password"
     ),
 ) -> None:
     """Generate dbt project scaffolding from approved requirement assessments.
@@ -756,11 +792,33 @@ def scaffold(
     db_type = platform.get("db_type", "postgresql")
     host = platform.get("host", "localhost")
     port = platform.get("port", 5432)
-    user = platform.get("user", "")
-    password = platform.get("password", "")
+    # Use CLI args, fallback to workspace platform
+    resolved_user = user or platform.get("user", "")
+    resolved_password = password or platform.get("password", "")
     db_name = platform.get("database", "")
     target_db = db_name or prj_id.replace("-", "_").lower()
     target_db_type = db_type.lower()
+
+    # Validate credentials before any DB operation
+    if not skip_db_setup:
+        if not resolved_user:
+            console.print(
+                "[red]Database user is required. "
+                "Pass --user or configure it in the workspace (antline init --user).[/]"
+            )
+            raise typer.Exit(1)
+        console.print(f"[dim]Validating credentials for {resolved_user}@{host}:{port} …[/]")
+        try:
+            _validate_db_credentials(
+                db_type=target_db_type,
+                host=host,
+                port=port,
+                user=resolved_user,
+                password=resolved_password,
+            )
+        except ConnectionError as exc:
+            console.print(f"[red]{exc}[/]")
+            raise typer.Exit(1) from None
 
     console.print(f"[bold]Scaffolding[/] dbt project for {prj_id} …")
     console.print(f"  Platform: {db_type} @ {host}:{port}/{target_db}")
@@ -773,8 +831,8 @@ def scaffold(
                 db_type=target_db_type,
                 host=host,
                 port=port,
-                user=user,
-                password=password,
+                user=resolved_user,
+                password=resolved_password,
                 db_name=target_db,
             )
             console.print(f"  [green]Database created:[/] {target_db}")
@@ -782,10 +840,10 @@ def scaffold(
                 console.print("  [green]Schemas created:[/] row, map, clean")
         except ValueError as e:
             console.print(f"[red]{e}[/]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         except Exception as e:
             console.print(f"[red]Database setup failed:[/] {e}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
     else:
         console.print("  [dim]Skipping database setup (--skip-db-setup)[/]")
 
@@ -803,7 +861,9 @@ def scaffold(
 
     # Generate all dbt files
     _generate_dbt_project_yml(prj, dbt_dir)
-    _generate_dbt_profile(prj, dbt_dir, target_db_type, host, port, user, password, target_db)
+    _generate_dbt_profile(
+        prj, dbt_dir, target_db_type, host, port, resolved_user, resolved_password, target_db
+    )
     _generate_sources_yml(prj, state, dbt_dir, used_tables, source_mode=source_mode)
     _generate_row_models(prj, state, dbt_dir, used_tables)
     _generate_map_models(prj, state, dbt_dir, req_mappings)

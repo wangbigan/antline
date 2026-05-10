@@ -662,6 +662,10 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
             "scaffold",
             prj_id,
             "--skip-db-setup",
+            "--user",
+            "postgres",
+            "--password",
+            "test",
         ],
     )
     assert result.exit_code == 0, result.output

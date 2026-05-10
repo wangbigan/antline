@@ -286,6 +286,10 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
                 "scaffold",
                 prj_id,
                 "--skip-db-setup",
+                "--user",
+                "postgres",
+                "--password",
+                "test",
             ],
         )
         assert result.exit_code == 0, result.output
