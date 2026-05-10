@@ -726,7 +726,7 @@ def _validate_db_credentials(
         return
 
     try:
-        engine = create_engine(conn_str, connect_args={"connect_timeout": 5})
+        engine = create_engine(conn_str, connect_args={"connect_timeout": 3})
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
     except Exception as exc:
@@ -806,7 +806,10 @@ def scaffold(
         if not resolved_password:
             resolved_password = typer.prompt("Database password", hide_input=True)
 
-        console.print(f"[dim]Validating credentials for {resolved_user}@{host}:{port} …[/]")
+        console.print(
+            f"[dim]Checking database connection ({resolved_user}@{host}:{port}) "
+            f"— timeout 3s …[/]"
+        )
         try:
             _validate_db_credentials(
                 db_type=target_db_type,
@@ -815,8 +818,13 @@ def scaffold(
                 user=resolved_user,
                 password=resolved_password,
             )
+            console.print("  [green]Connection OK[/]")
         except ConnectionError as exc:
             console.print(f"[red]{exc}[/]")
+            console.print(
+                "[yellow]Hint:[/] Make sure the database server is running and "
+                "accessible at the given host/port."
+            )
             raise typer.Exit(1) from None
 
     console.print(f"[bold]Scaffolding[/] dbt project for {prj_id} …")
