@@ -18,6 +18,7 @@ It provides a structured CLI workflow for data teams (and agents) to:
 - **Human-friendly**: Interactive prompts and rich reports for manual workflows
 - **Git-native**: All state stored as YAML files — version control your data projects
 - **Workspace-centric**: One workspace = one data platform, all projects share the same target database
+- **Security-first**: No credentials stored in any config file; all passwords prompted at runtime with audit logging
 - **Lightweight**: Delegates execution to dbt; Antline manages the workflow layer
 - **Open source**: Apache-2.0, built for independent developers and small teams
 
@@ -27,13 +28,12 @@ It provides a structured CLI workflow for data teams (and agents) to:
 # Install
 pip install antline[all]
 
-# Initialize a workspace (with target database platform)
+# Initialize a workspace (target database platform config)
 mkdir my-data-workspace && cd my-data-workspace
 antline init --name "Hospital Data Team" \
-  --db-type postgresql --host localhost --port 5432 \
-  --user postgres --password '***'
+  --db-type postgresql --host localhost --port 5432
 
-# Add a data source
+# Add a data source (password prompted at runtime)
 antline source add --type postgresql --host localhost --port 5432 \
   --database mydb --user myuser
 
@@ -56,20 +56,23 @@ antline requirement add-schema REQ-20260508-001 standard_schema.csv
 # Assess feasibility against source data (draft for review)
 antline requirement assess REQ-20260508-001 SRC-20260508-001
 
+# After reviewing assessment materials and saving as assessment.md:
+antline requirement approve REQ-20260508-001
+
 # Create project and scaffold pipeline
 antline project create --name "Patient 360" --requirement REQ-20260508-001
 
-# Scaffold (uses workspace platform config, no database params needed)
-antline project scaffold PRJ-20260508-001
+# Scaffold (credentials prompted at runtime, never stored)
+antline project scaffold PRJ-20260508-001 --user myuser --password '***'
 
 # Compile (validate SQL syntax without executing)
 antline project compile PRJ-20260508-001
 antline project compile PRJ-20260508-001 -m map_patients
 
-# Build with dbt
-cd projects/PRJ-20260508-001/dbt && dbt build
+# Build with dbt (credentials prompted at runtime)
+antline project build PRJ-20260508-001
 
-# Validate and deliver
+# Validate and deliver (credentials prompted at runtime)
 antline project validate PRJ-20260508-001
 antline project deliver PRJ-20260508-001
 ```
@@ -151,7 +154,6 @@ my-workspace/
 │       │       ├── map/     # Map layer
 │       │       ├── clean/   # Clean layer
 │       │       └── sources.yml
-│       ├── .env             # Database password helper
 │       └── qc/
 │           └── report.md    # QC report
 └── reports/                 # Workspace-level reports
@@ -173,7 +175,7 @@ IDs are sequential within the same date. Cross-date IDs do not interfere with ea
 | Command | Description |
 |---------|-------------|
 | `antline --version` | Show version |
-| `antline init [--path DIR] [--name NAME] --db-type TYPE --host H --port P --user U --password PWD [--no-test-connection]` | Initialize workspace with platform config |
+| `antline init [--path DIR] [--name NAME] --db-type TYPE --host H --port P [--user U] [--password PWD] [--no-test-connection]` | Initialize workspace with platform config (tests connection, credentials not stored) |
 | `antline status` | Show workspace overview (sources, requirements, projects) |
 
 ### Source Management
@@ -204,7 +206,7 @@ IDs are sequential within the same date. Cross-date IDs do not interfere with ea
 | `antline requirement show REQ-xxx` | Show requirement details |
 | `antline requirement add-schema REQ-xxx PATH [PATH ...]` | Add target schema YAML(s), directory, or CSV to a requirement |
 | `antline requirement assess REQ-xxx SRC-xxx [SRC-yyy ...] [--focus TABLES] [--full]` | Generate LLM prompt + human guide + Markdown template for review |
-| `antline requirement approve REQ-xxx [--file PATH] [--force]` | Confirm requirement after reviewing assessment.md |
+| `antline requirement approve REQ-xxx [--file PATH] [--force] [--note TEXT]` | Confirm requirement after reviewing assessment.md. Validates source_table/field references against explore reports. Use `--force` to bypass validation or re-approve an IN_PROJECT requirement (requires `--note`). |
 | `antline requirement update REQ-xxx ...` | Update requirement (resets assessment) |
 | `antline requirement remove REQ-xxx [--force]` | Remove a requirement |
 
@@ -215,10 +217,10 @@ IDs are sequential within the same date. Cross-date IDs do not interfere with ea
 | `antline project create --name NAME --requirements REQ-xxx` | Create project from approved requirements |
 | `antline project list [--json]` | List all projects |
 | `antline project show PRJ-xxx` | Show project details |
-| `antline project scaffold PRJ-xxx [--source-mode {fdw\|sync}] [--skip-db-setup]` | Generate dbt project scaffolding (uses workspace platform config) |
-| `antline project compile PRJ-xxx [-m MODEL]` | Validate SQL syntax without executing |
-| `antline project build PRJ-xxx` | Build with dbt |
-| `antline project validate PRJ-xxx` | Run data quality tests |
+| `antline project scaffold PRJ-xxx [--source-mode {fdw\|sync}] [--skip-db-setup] [--user U] [--password PWD]` | Generate dbt project scaffolding (credentials prompted if not provided) |
+| `antline project compile PRJ-xxx [-m MODEL] [--user U] [--password PWD]` | Validate SQL syntax without executing |
+| `antline project build PRJ-xxx [--user U] [--password PWD]` | Build with dbt |
+| `antline project validate PRJ-xxx [--user U] [--password PWD]` | Run data quality tests |
 | `antline project deliver PRJ-xxx` | Mark as production-ready |
 
 ## Scaffold: Row Layer Source Modes
@@ -258,8 +260,7 @@ Prerequisites:
 
 ```bash
 antline init --name "医院数据团队" \
-  --db-type postgresql --host localhost --port 5432 \
-  --user wbg --password '***'
+  --db-type postgresql --host localhost --port 5432
 ```
 
 ### 2. Define Target Standard
@@ -282,11 +283,12 @@ antline schema import hospital_standard.csv --output-dir target_schema
 ### 3. Explore Source Databases
 
 ```bash
-# Add HIS system database (connection is validated before saving)
+# Add HIS system database (connection is validated before saving, password prompted)
 antline source add --type postgresql --host db.hospital.local \
-  --database his_db --user wbg --password '***'
+  --database his_db --user wbg
 
 # Explore structure (generates both report.yml for agents and report.md for humans)
+# Password is prompted at runtime and never stored
 # Sample data in sensitive fields is masked by default
 antline source explore SRC-20260508-001
 
@@ -332,7 +334,12 @@ antline requirement assess REQ-20260508-001 SRC-20260508-001 --focus patient_inf
 antline requirement assess REQ-20260508-001 SRC-20260508-001 --full
 
 # Review the generated materials, save as assessment.md, then approve
+# Approval validates source_table/source_field against explore reports
 antline requirement approve REQ-20260508-001
+
+# If validation fails (e.g. table/field doesn't exist in explore report),
+# fix assessment.md or use --force to bypass
+antline requirement approve REQ-20260508-001 --force
 ```
 
 **Design note:** `assess` does NOT auto-generate field mappings. It produces
@@ -346,6 +353,21 @@ files in `requirements/REQ-xxx/assessment/` for human or LLM review:
 
 Copy the prompt to an LLM, review the output, save it as `assessment.md`,
 then run `approve` to store the assessment in the requirement.
+
+**Approval validation:** During `approve`, Antline cross-checks every
+non-`missing` mapping against the source explore reports:
+- `source_table` must exist in the corresponding source's explore report
+- `source_field` must exist in that table's columns
+
+If validation fails, errors are printed with line numbers. Use `--force` to
+approve anyway (e.g. for planned future schema changes).
+
+**Re-approval:** If a requirement is already in a project (`IN_PROJECT` status),
+you can re-approve it with `--force` and a `--note` explaining the reason:
+```bash
+antline requirement approve REQ-20260508-001 --force --note "修正表名: visits -> inpatient_visits"
+```
+The status remains `IN_PROJECT`, and the note is recorded in the assessment.
 
 Assessment output:
 ```
@@ -365,14 +387,11 @@ Assessment output:
 ```bash
 antline project create --name "患者数据集成项目" --requirements REQ-20260508-001
 
-# Scaffold (uses workspace platform config automatically)
+# Scaffold (credentials prompted at runtime, never stored)
 antline project scaffold PRJ-20260508-001
 
 # Setup FDW (for fdw mode)
 psql -d hospital_data -f projects/PRJ-20260508-001/dbt/sql/fdw_setup.sql
-
-# Source environment variables
-set -a && source projects/PRJ-20260508-001/.env && set +a
 ```
 
 Generated dbt models:
@@ -394,13 +413,13 @@ FROM {{ ref('row_patients') }}
 ### 6. Compile, Build and Validate
 
 ```bash
-# Validate SQL syntax without executing (fast)
+# Validate SQL syntax without executing (fast, credentials prompted)
 antline project compile PRJ-20260508-001
 
-# Build with dbt
-cd projects/PRJ-20260508-001/dbt && dbt build
+# Build with dbt (credentials prompted)
+antline project build PRJ-20260508-001
 
-# Validate and deliver
+# Validate and deliver (credentials prompted)
 antline project validate PRJ-20260508-001
 antline project deliver PRJ-20260508-001
 ```
@@ -423,10 +442,10 @@ antline source explore SRC-20260508-001 --json
 **Agent workflow pattern:**
 
 ```python
-# 1. Agent initializes workspace
-run("antline init --name X --db-type postgresql --host localhost --port 5432 --user postgres --password '***'")
+# 1. Agent initializes workspace (no credentials stored)
+run("antline init --name X --db-type postgresql --host localhost --port 5432")
 
-# 2. Agent reads source metadata
+# 2. Agent reads source metadata (password prompted at runtime)
 report = yaml.safe_load(run("antline source explore SRC-20260508-001 --json"))
 
 # 3. Agent defines requirement with background + goal
@@ -445,14 +464,18 @@ assessment_md = llm_generate_assessment(prompt)  # agent logic
 with open("requirements/REQ-20260508-001/assessment/assessment.md", "w") as f:
     f.write(assessment_md)
 
-# 6. Agent approves the completed assessment
+# 6. Agent approves the completed assessment (validates against explore reports)
 run("antline requirement approve REQ-20260508-001")
+
+# If validation fails (e.g. table/field mismatch), agent can fix assessment.md
+# and retry, or use --force if the mismatch is intentional
+# run("antline requirement approve REQ-20260508-001 --force")
 
 # 7. Create project and scaffold
 run("antline project create --name X --requirements REQ-20260508-001")
 run("antline project scaffold PRJ-20260508-001 --source-mode fdw")
 
-# 8. Compile and build
+# 8. Compile and build (credentials prompted at runtime)
 run("antline project compile PRJ-20260508-001")
 run("antline project build PRJ-20260508-001")
 ```
@@ -506,8 +529,11 @@ ruff check antline/ tests/
 - [x] Connection validation for source add
 - [x] PII-aware data masking in explore reports
 - [x] Dual-format reports (YAML for agents + Markdown for humans)
+- [x] No credential storage — all passwords prompted at runtime
+- [x] Audit logging for compliance
+- [x] Approval validation against explore reports
+- [x] Re-approval for IN_PROJECT requirements with notes
 - [ ] Extract job (physical data sync for sync mode)
-- [ ] Password encryption for source configs
 - [ ] Schedule command (cron wrapper / Airflow DAG generation)
 - [ ] Plugin system for custom ETL backends
 - [ ] Web UI (lightweight)
