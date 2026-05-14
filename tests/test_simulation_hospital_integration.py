@@ -333,8 +333,6 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
             ".",
             "--name",
             "hospital-integration",
-            "--password",
-            "test",
             "--no-test-connection",
         ],
     )
@@ -354,8 +352,6 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
             str(hospital_dbs["his"]),
             "--user",
             "wbg",
-            "--password",
-            "5678",
             "--name",
             "HIS",
             "--no-test-connection",
@@ -378,8 +374,6 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
             str(hospital_dbs["emr"]),
             "--user",
             "wbg",
-            "--password",
-            "5678",
             "--name",
             "EMR",
             "--no-test-connection",
@@ -392,7 +386,7 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
     his_engine = create_engine(f"sqlite:///{hospital_dbs['his']}")
     emr_engine = create_engine(f"sqlite:///{hospital_dbs['emr']}")
 
-    def mock_get_engine(source):
+    def mock_get_engine(source, password=None):
         if source.id == his_id:
             return his_engine
         return emr_engine
@@ -400,7 +394,7 @@ def test_hospital_integration_workflow(hospital_dbs: dict, monkeypatch) -> None:
     monkeypatch.setattr(db_module, "get_engine", mock_get_engine)
 
     for sid in [his_id, emr_id]:
-        result = runner.invoke(app, ["source", "explore", sid])
+        result = runner.invoke(app, ["source", "explore", sid], input="test\n")
         assert result.exit_code == 0, result.output
         assert (project_root / "sources" / sid / "explore" / "report.yml").exists()
 

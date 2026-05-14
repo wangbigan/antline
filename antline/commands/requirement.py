@@ -249,7 +249,10 @@ def approve(
         help="Path to the completed assessment Markdown file. "
         "Defaults to reports/assessment/{req_id}_assessment.md",
     ),
-    force: bool = typer.Option(False, "--force", help="Approve even if not feasible"),
+    force: bool = typer.Option(False, "--force", help="Approve even if not feasible or already in project"),
+    note: str = typer.Option(
+        "", "--note", help="Re-approval reason (required when re-approving an IN_PROJECT requirement)"
+    ),
 ) -> None:
     """Approve a requirement after manual review of the assessment.
 
@@ -263,11 +266,25 @@ def approve(
         console.print(f"[red]Requirement not found:[/] {req_id}")
         raise typer.Exit(1)
 
-    if req.status == RequirementStatus.APPROVED:
-        console.print(f"[yellow]已经审批通过:[/] {req_id}")
-        return
+    if req.status == RequirementStatus.IN_PROJECT:
+        if not force:
+            console.print(
+                f"[red]Requirement {req_id} is already in a project. "
+                "Use --force to re-approve with a note.[/]"
+            )
+            raise typer.Exit(1)
+        if not note:
+            console.print(
+                "[red]Re-approving an IN_PROJECT requirement requires a --note "
+                "explaining the reason.[/]"
+            )
+            raise typer.Exit(1)
 
-    if req.status != RequirementStatus.ASSESSED:
+    if req.status == RequirementStatus.APPROVED and not force:
+        console.print(f"[yellow]已经审批通过:[/] {req_id} (使用 --force 强制更新)")
+        raise typer.Exit(1)
+
+    if req.status not in (RequirementStatus.ASSESSED, RequirementStatus.APPROVED, RequirementStatus.IN_PROJECT):
         console.print(f"[red]需求尚未评估。当前状态: {req.status.value}[/]")
         raise typer.Exit(1)
 
@@ -327,18 +344,84 @@ def approve(
             field_mappings=mappings,
             risks=risks,
             notes=data.get("notes", ""),
+            reapproval_reason=note,
             assessed_at=datetime.now(timezone(timedelta(hours=8))),
         )
     except Exception as exc:
         console.print(f"[red]评估数据无效:[/] {exc}")
         raise typer.Exit(1)
 
+    # ------------------------------------------------------------------
+    # Validate table/field references against explore reports
+    # ------------------------------------------------------------------
+    validation_errors: list[str] = []
+
+    # Load all explore reports referenced by source_ids
+    explore_reports: dict[str, SourceExploreReport] = {}
+    for sid in data.get("source_ids", []):
+        report_path = state.root / "sources" / sid / "explore" / "report.yml"
+        if report_path.exists():
+            report_data = yaml.safe_load(report_path.read_text())
+            if report_data:
+                explore_reports[sid] = SourceExploreReport.model_validate(report_data)
+
+    for idx, m in enumerate(data.get("field_mappings", []), start=1):
+        if m.get("mapping_type") == "missing":
+            continue
+
+        source_table = m.get("source_table") or ""
+        source_field = m.get("source_field") or ""
+        target_field = m.get("target_field", "")
+
+        if not source_table or not source_field:
+            continue
+
+        # Extract pure table name (e.g. "src_20260508_001.patients" -> "patients")
+        table_name = source_table.split(".")[-1]
+
+        # Determine which source this table belongs to
+        matched = False
+        for sid, report in explore_reports.items():
+            table_names = {t.name for t in report.tables}
+            if table_name in table_names:
+                matched = True
+                # Find the table and check if the field exists
+                for table in report.tables:
+                    if table.name == table_name:
+                        field_names = {c.name for c in table.columns}
+                        if source_field not in field_names:
+                            validation_errors.append(
+                                f"  [{idx}] target={target_field}: "
+                                f"field '{source_field}' not found in table '{table_name}' (source={sid})"
+                            )
+                        break
+                break
+
+        if not matched:
+            validation_errors.append(
+                f"  [{idx}] target={target_field}: "
+                f"table '{table_name}' not found in any explore report"
+            )
+
+    if validation_errors:
+        console.print("[yellow]Validation warnings:[/]")
+        for err in validation_errors:
+            console.print(f"  {err}")
+        if not force:
+            console.print(
+                "[red]Validation failed. Use --force to approve anyway, or fix the issues above.[/]"
+            )
+            raise typer.Exit(1)
+        console.print("[yellow]Proceeding with --force (validation errors ignored).[/]")
+
     if not feasible and not force:
         console.print("[red]评估标记为不可行。使用 --force 强制通过，或先修复问题。[/]")
         raise typer.Exit(1)
 
     req.assessment = assessment
-    req.status = RequirementStatus.APPROVED
+    # Keep IN_PROJECT status if re-approving a requirement already in a project
+    if req.status != RequirementStatus.IN_PROJECT:
+        req.status = RequirementStatus.APPROVED
     state.save_requirement(req)
     git_add_all(state.root)
     git_commit(f"feat(requirement): approve {req_id}", state.root)

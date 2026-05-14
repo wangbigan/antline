@@ -1,4 +1,8 @@
-"""Data source management commands."""
+"""Data source management commands.
+
+Passwords are never stored in source configuration files.
+They must be provided at runtime for each database operation.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +12,7 @@ from rich.console import Console
 from rich.table import Table
 from sqlalchemy import text
 
+from antline.core.audit import log_operation
 from antline.core.config import ProjectState
 from antline.core.db import explore_source, get_engine
 from antline.core.git import git_add_all, git_commit
@@ -18,6 +23,11 @@ app = typer.Typer(no_args_is_help=True)
 console = Console()
 
 
+def _prompt_password() -> str:
+    """Prompt for database password with hidden input."""
+    return typer.prompt("Database password", hide_input=True)
+
+
 @app.command()
 def add(
     db_type: DataSourceType = typer.Option(..., "--type", "-t", help="Database type"),
@@ -25,14 +35,17 @@ def add(
     port: int = typer.Option(0, "--port", "-P", help="Port (0 = auto by type)"),
     database: str = typer.Option(..., "--database", "-d", help="Database name"),
     user: str = typer.Option(..., "--user", "-u", help="Username"),
-    password: str = typer.Option(
-        ..., "--password", "-p", prompt=True, hide_input=True, help="Password"
-    ),
+    password: str = typer.Option("", "--password", help="Password (prompted if not provided)"),
     name: str = typer.Option("", "--name", "-n", help="Display name (defaults to database)"),
     source_id: str = typer.Option("", "--id", help="Custom ID (auto-generated if omitted)"),
-    no_test: bool = typer.Option(False, "--no-test-connection", help="Skip connection validation"),
+    test_connection: bool = typer.Option(
+        True, "--test-connection/--no-test-connection", help="Test connection before saving"
+    ),
 ) -> None:
-    """Add a new data source."""
+    """Add a new data source.
+
+    Password is prompted at runtime and never stored.
+    """
     state = ProjectState()
 
     # Auto port
@@ -52,13 +65,14 @@ def add(
         port=port,
         database=database,
         user=user,
-        password=password,
     )
 
-    if not no_test:
+    if test_connection:
+        if not password:
+            password = _prompt_password()
         console.print(f"[dim]Connecting {host}:{port}/{database} …[/]", end=" ")
         try:
-            engine = get_engine(source)
+            engine = get_engine(source, password)
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
             console.print("[green]ok[/]")
@@ -77,6 +91,10 @@ def add(
             else:
                 console.print(f"[red]failed[/]\n  {exc}")
             raise typer.Exit(1)
+
+        log_operation(
+            state.root, "source_add_test", user, f"{host}:{port}/{database}", {"source_id": sid}
+        )
 
     state.save_source(source)
     git_add_all(state.root)
@@ -124,15 +142,30 @@ def explore(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output raw JSON/YAML"),
 ) -> None:
-    """Explore a data source and generate metadata report."""
+    """Explore a data source and generate metadata report.
+
+    Password is prompted at runtime and never stored.
+    """
     state = ProjectState()
     source = state.get_source(source_id)
     if not source:
         console.print(f"[red]Source not found:[/] {source_id}")
         raise typer.Exit(1)
 
+    password = _prompt_password()
+
     console.print(f"[bold]Exploring[/] {source_id} ({source.name}) …")
-    report = explore_source(source, max_tables=max_tables, mask_sensitive=not no_mask)
+    report = explore_source(
+        source, password=password, max_tables=max_tables, mask_sensitive=not no_mask
+    )
+
+    log_operation(
+        state.root,
+        "source_explore",
+        source.user,
+        f"{source.host}:{source.port}/{source.database}",
+        {"source_id": source_id, "tables": len(report.tables)},
+    )
 
     explore_dir = state.root / "sources" / source_id / "explore"
     explore_dir.mkdir(parents=True, exist_ok=True)
@@ -210,12 +243,12 @@ def update(
     port: int | None = typer.Option(None, "--port", "-P", help="Port"),
     database: str | None = typer.Option(None, "--database", "-d", help="Database name"),
     user: str | None = typer.Option(None, "--user", "-u", help="Username"),
-    password: str | None = typer.Option(
-        None, "--password", "-p", hide_input=True, help="Password (omit to keep current)"
-    ),
     db_type: DataSourceType | None = typer.Option(None, "--type", "-t", help="Database type"),
 ) -> None:
-    """Update an existing data source. Only specified fields are changed."""
+    """Update an existing data source. Only specified fields are changed.
+
+    Passwords cannot be updated here — they are never stored.
+    """
     state = ProjectState()
     source = state.get_source(source_id)
     if not source:
@@ -233,8 +266,6 @@ def update(
         updated.database = database
     if user is not None:
         updated.user = user
-    if password is not None and password != "":
-        updated.password = password
     if db_type is not None:
         updated.db_type = db_type
 

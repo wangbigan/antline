@@ -96,8 +96,6 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
                 ".",
                 "--name",
                 "e2e-test",
-                "--password",
-                "test",
                 "--no-test-connection",
             ],
         )
@@ -118,8 +116,6 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
                 str(sqlite_db),
                 "--user",
                 "wbg",
-                "--password",
-                "5678",
                 "--no-test-connection",
             ],
         )
@@ -129,9 +125,9 @@ def test_full_workflow(sqlite_db: Path, target_schema_yaml: dict, monkeypatch) -
 
         # --- Step 3: source explore (mock engine to use SQLite) ---
         engine = create_engine(f"sqlite:///{sqlite_db}")
-        monkeypatch.setattr(db_module, "get_engine", lambda _source: engine)
+        monkeypatch.setattr(db_module, "get_engine", lambda _source, _password=None: engine)
 
-        result = runner.invoke(app, ["source", "explore", src_id])
+        result = runner.invoke(app, ["source", "explore", src_id], input="test\n")
         assert result.exit_code == 0, result.output
         assert (project_root / "sources" / src_id / "explore" / "report.yml").exists()
 

@@ -69,7 +69,6 @@ def sqlite_source():
         port=0,
         database=db_path,
         user="",
-        password="",
     )
 
     Path(db_path).unlink(missing_ok=True)
@@ -78,7 +77,7 @@ def sqlite_source():
 def test_explore_source_basic(sqlite_source: DataSource, monkeypatch) -> None:
     """Test that explore_source returns metadata for all tables."""
     engine = create_engine(f"sqlite:///{sqlite_source.database}")
-    monkeypatch.setattr(db_module, "get_engine", lambda _source: engine)
+    monkeypatch.setattr(db_module, "get_engine", lambda _source, _password=None: engine)
 
     report = explore_source(sqlite_source)
 
@@ -92,7 +91,7 @@ def test_explore_source_basic(sqlite_source: DataSource, monkeypatch) -> None:
 def test_explore_source_table_metadata(sqlite_source: DataSource, monkeypatch) -> None:
     """Test table-level metadata extraction."""
     engine = create_engine(f"sqlite:///{sqlite_source.database}")
-    monkeypatch.setattr(db_module, "get_engine", lambda _source: engine)
+    monkeypatch.setattr(db_module, "get_engine", lambda _source, _password=None: engine)
 
     report = explore_source(sqlite_source)
 
@@ -106,7 +105,7 @@ def test_explore_source_table_metadata(sqlite_source: DataSource, monkeypatch) -
 def test_explore_source_column_stats(sqlite_source: DataSource, monkeypatch) -> None:
     """Test column statistics extraction."""
     engine = create_engine(f"sqlite:///{sqlite_source.database}")
-    monkeypatch.setattr(db_module, "get_engine", lambda _source: engine)
+    monkeypatch.setattr(db_module, "get_engine", lambda _source, _password=None: engine)
 
     report = explore_source(sqlite_source)
 
@@ -124,7 +123,7 @@ def test_explore_source_column_stats(sqlite_source: DataSource, monkeypatch) -> 
 def test_explore_source_pk_detection(sqlite_source: DataSource, monkeypatch) -> None:
     """Test primary key detection."""
     engine = create_engine(f"sqlite:///{sqlite_source.database}")
-    monkeypatch.setattr(db_module, "get_engine", lambda _source: engine)
+    monkeypatch.setattr(db_module, "get_engine", lambda _source, _password=None: engine)
 
     report = explore_source(sqlite_source)
 

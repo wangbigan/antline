@@ -13,6 +13,7 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from antline.core.audit import log_operation
 from antline.core.config import ProjectState
 from antline.core.git import git_add_all, git_commit
 from antline.core.models import (
@@ -44,17 +45,16 @@ def _dbt_safe_name(name: str) -> str:
     return safe
 
 
-def _get_dbt_env(prj_id: str, platform: dict[str, Any] | None) -> dict[str, str]:
-    """Build environment dict for dbt subprocess with password injected.
+def _get_dbt_env(prj_id: str, user: str = "", password: str = "") -> dict[str, str]:
+    """Build environment dict for dbt subprocess with credentials injected.
 
-    Profiles.yml references passwords via env_var. This ensures the workspace
-    platform password is available without a manual .env file.
+    Profiles.yml references default values. Actual credentials are injected
+    at runtime via environment variables.
     """
     env = dict(os.environ)
-    if platform:
-        password = platform.get("password", "")
-        env_var_name = f"DBT_PASSWORD_{prj_id.replace('-', '_')}"
-        env[env_var_name] = password
+    suffix = prj_id.replace("-", "_")
+    env[f"DBT_USER_{suffix}"] = user
+    env[f"DBT_PASSWORD_{suffix}"] = password
     return env
 
 
@@ -90,13 +90,15 @@ def _collect_scaffold_data(
         assessment = req.assessment
         for m in assessment.field_mappings:
             if m.source_table:
+                # source_table may include schema prefix (e.g. "src_20260508_001.patients")
+                source_table_name = m.source_table.split(".")[-1]
                 # Determine which source this table belongs to
                 for sid in assessment.source_ids:
                     reports = _load_explore_reports(state, [sid])
                     if sid in reports:
                         table_names = {t.name for t in reports[sid].tables}
-                        if m.source_table in table_names:
-                            used_tables[sid].add(m.source_table)
+                        if source_table_name in table_names:
+                            used_tables[sid].add(source_table_name)
                             break
 
             target_table = m.target_field.split(".")[0]
@@ -224,12 +226,16 @@ def _generate_dbt_profile(
     host: str,
     port: int,
     user: str,
-    password: str,
     db_name: str,
 ) -> Path:
-    """Generate profiles.yml for the project."""
+    """Generate profiles.yml for the project.
+
+    Credentials are NEVER stored here. They are injected at runtime via env var.
+    """
     profile_name = _dbt_safe_name(project.name)
-    env_var_name = f"DBT_PASSWORD_{project.id.replace('-', '_')}"
+    suffix = project.id.replace("-", "_")
+    user_env_var = f"DBT_USER_{suffix}"
+    password_env_var = f"DBT_PASSWORD_{suffix}"
 
     # dbt adapter type mapping
     dbt_type = {"postgresql": "postgres", "mysql": "mysql", "tidb": "mysql"}.get(db_type, db_type)
@@ -242,8 +248,8 @@ def _generate_dbt_profile(
                     "type": dbt_type,
                     "host": host,
                     "port": port,
-                    "user": user,
-                    "password": f"{{{{ env_var('{env_var_name}', '') }}}}",
+                    "user": f"{{{{ env_var('{user_env_var}', '{user}') }}}}",
+                    "password": f"{{{{ env_var('{password_env_var}', '') }}}}",
                     "dbname": db_name,
                     "schema": "dev",
                     "threads": 4,
@@ -389,8 +395,9 @@ def _generate_fdw_script(
                     f"CREATE SERVER IF NOT EXISTS {q_server}",
                     "  FOREIGN DATA WRAPPER postgres_fdw",
                     f"  OPTIONS (host '{src.host}', dbname '{src.database}', port '{src.port}');",
+                    "-- NOTE: Replace <SOURCE_PASSWORD> with the actual source password",
                     f"CREATE USER MAPPING IF NOT EXISTS FOR CURRENT_USER SERVER {q_server}",
-                    f"  OPTIONS (user '{src.user}', password '{src.password or ''}');",
+                    f"  OPTIONS (user '{src.user}', password '<SOURCE_PASSWORD>');",
                     f"CREATE SCHEMA IF NOT EXISTS {q_schema};",
                 ]
             )
@@ -500,7 +507,8 @@ def _generate_map_models(
 
             if table_counts:
                 primary_table = max(table_counts, key=lambda k: table_counts[k])
-                from_ref = f"{{{{ ref('row_{primary_table.lower().replace(' ', '_')}') }}}}"
+                primary_table_name = (primary_table or "").split(".")[-1]
+                from_ref = f"{{{{ ref('row_{primary_table_name.lower().replace(' ', '_')}') }}}}"
 
                 # If multiple tables contribute, add CTE hints
                 other_tables = [t for t in table_counts if t != primary_table]
@@ -597,7 +605,7 @@ def create(
         if not req:
             console.print(f"[red]Requirement not found:[/] {rid}")
             raise typer.Exit(1)
-        if req.status not in (RequirementStatus.APPROVED, RequirementStatus.IN_PROJECT):
+        if req.status != RequirementStatus.APPROVED:
             console.print(
                 f"[red]Requirement {rid} not approved. Current status: {req.status.value}[/]"
             )
@@ -785,21 +793,20 @@ def scaffold(
     if not platform:
         console.print(
             "[red]Workspace platform not configured. "
-            "Run `antline init` with --db-type, --host, --port, --user, --password.[/]"
+            "Run `antline init` with --db-type, --host, --port.[/]"
         )
         raise typer.Exit(1)
 
     db_type = platform.get("db_type", "postgresql")
     host = platform.get("host", "localhost")
     port = platform.get("port", 5432)
-    # Use CLI args, fallback to workspace platform
-    resolved_user = user or platform.get("user", "")
-    resolved_password = password or platform.get("password", "")
     db_name = platform.get("database", "")
     target_db = db_name or prj_id.replace("-", "_").lower()
     target_db_type = db_type.lower()
 
     # Prompt for credentials when needed (before any DB operation)
+    resolved_user = user
+    resolved_password = password
     if not skip_db_setup:
         if not resolved_user:
             resolved_user = typer.prompt("Database user")
@@ -869,7 +876,7 @@ def scaffold(
     # Generate all dbt files
     _generate_dbt_project_yml(prj, dbt_dir)
     _generate_dbt_profile(
-        prj, dbt_dir, target_db_type, host, port, resolved_user, resolved_password, target_db
+        prj, dbt_dir, target_db_type, host, port, resolved_user, target_db
     )
     _generate_sources_yml(prj, state, dbt_dir, used_tables, source_mode=source_mode)
     _generate_row_models(prj, state, dbt_dir, used_tables)
@@ -923,8 +930,16 @@ def compile(
     model: str = typer.Option(
         "", "--model", "-m", help="指定模型名 (如 row_patients / map_patients)"
     ),
+    user: str = typer.Option(
+        "", "--user", "-u", help="Database user (prompted if not provided)"
+    ),
+    password: str = typer.Option(
+        "", "--password", help="Database password (prompted if not provided)"
+    ),
 ) -> None:
     """Compile dbt models to validate SQL syntax without executing.
+
+    Credentials are prompted at runtime and never stored.
 
     Examples:
         antline project compile PRJ-001           # 全局校验
@@ -943,6 +958,11 @@ def compile(
         )
         raise typer.Exit(1)
 
+    if not user:
+        user = typer.prompt("Database user")
+    if not password:
+        password = typer.prompt("Database password", hide_input=True)
+
     import subprocess
 
     cmd = ["dbt", "compile"]
@@ -951,7 +971,7 @@ def compile(
 
     console.print(f"[bold]Compiling[/] {prj_id} …")
     result = subprocess.run(
-        cmd, cwd=dbt_dir, capture_output=False, env=_get_dbt_env(prj_id, state.workspace_platform())
+        cmd, cwd=dbt_dir, capture_output=False, env=_get_dbt_env(prj_id, user, password)
     )
 
     if result.returncode == 0:
@@ -965,8 +985,17 @@ def compile(
 def build(
     prj_id: str = typer.Argument(..., help="Project ID"),
     version: str = typer.Option("", "--version", "-v", help="Version tag (auto if omitted)"),
+    user: str = typer.Option(
+        "", "--user", "-u", help="Database user (prompted if not provided)"
+    ),
+    password: str = typer.Option(
+        "", "--password", help="Database password (prompted if not provided)"
+    ),
 ) -> None:
-    """Build the project (call dbt run)."""
+    """Build the project (call dbt run).
+
+    Credentials are prompted at runtime and never stored.
+    """
     state = ProjectState()
     prj = state.get_project(prj_id)
     if not prj:
@@ -980,6 +1009,11 @@ def build(
         )
         raise typer.Exit(1)
 
+    if not user:
+        user = typer.prompt("Database user")
+    if not password:
+        password = typer.prompt("Database password", hide_input=True)
+
     import subprocess
 
     console.print(f"[bold]Building[/] {prj_id} with dbt …")
@@ -987,7 +1021,15 @@ def build(
         ["dbt", "build"],
         cwd=dbt_dir,
         capture_output=False,
-        env=_get_dbt_env(prj_id, state.workspace_platform()),
+        env=_get_dbt_env(prj_id, user, password),
+    )
+
+    log_operation(
+        state.root,
+        "project_build",
+        user,
+        f"{prj_id}",
+        {"project_id": prj_id, "status": "success" if result.returncode == 0 else "failed"},
     )
 
     vid = version or f"v{len(prj.versions) + 1}.0.0"
@@ -1012,8 +1054,17 @@ def build(
 @app.command()
 def validate(
     prj_id: str = typer.Argument(..., help="Project ID"),
+    user: str = typer.Option(
+        "", "--user", "-u", help="Database user (prompted if not provided)"
+    ),
+    password: str = typer.Option(
+        "", "--password", help="Database password (prompted if not provided)"
+    ),
 ) -> None:
-    """Run data quality validation (dbt tests + custom checks)."""
+    """Run data quality validation (dbt tests + custom checks).
+
+    Credentials are prompted at runtime and never stored.
+    """
     state = ProjectState()
     prj = state.get_project(prj_id)
     if not prj:
@@ -1025,6 +1076,11 @@ def validate(
         console.print("[red]No dbt project found. Run scaffold first.[/]")
         raise typer.Exit(1)
 
+    if not user:
+        user = typer.prompt("Database user")
+    if not password:
+        password = typer.prompt("Database password", hide_input=True)
+
     import json
     import subprocess
     from datetime import datetime, timezone
@@ -1034,7 +1090,15 @@ def validate(
         ["dbt", "test"],
         cwd=dbt_dir,
         capture_output=False,
-        env=_get_dbt_env(prj_id, state.workspace_platform()),
+        env=_get_dbt_env(prj_id, user, password),
+    )
+
+    log_operation(
+        state.root,
+        "project_validate",
+        user,
+        f"{prj_id}",
+        {"project_id": prj_id, "status": "passed" if result.returncode == 0 else "failed"},
     )
 
     # Parse run_results.json for all test results

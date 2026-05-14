@@ -27,12 +27,13 @@ from antline.core.pii_detector import field_has_pii, mask_value
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
-def get_engine(source: DataSource) -> Engine:
+def get_engine(source: DataSource, password: str = "") -> Engine:
     kwargs: dict = {"pool_pre_ping": True}
+    conn_str = source.connection_string(password)
     # SQLite does not support connect_timeout
-    if "sqlite" not in source.connection_string():
+    if "sqlite" not in conn_str:
         kwargs["connect_args"] = {"connect_timeout": 10}
-    return create_engine(source.connection_string(), **kwargs)
+    return create_engine(conn_str, **kwargs)
 
 
 def _get_table_row_count(engine: Engine, table_name: str, schema_name: str | None) -> int:
@@ -188,10 +189,13 @@ def _is_sensitive(col_name: str) -> bool:
 
 
 def explore_source(
-    source: DataSource, max_tables: int = 0, mask_sensitive: bool = True
+    source: DataSource,
+    password: str = "",
+    max_tables: int = 0,
+    mask_sensitive: bool = True,
 ) -> SourceExploreReport:
     """Explore a data source and return metadata + statistics."""
-    engine = get_engine(source)
+    engine = get_engine(source, password)
     inspector: Inspector = inspect(engine)
 
     report = SourceExploreReport(source_id=source.id)

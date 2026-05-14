@@ -18,7 +18,10 @@ class DataSourceType(str, Enum):
 
 
 class WorkspacePlatformConfig(BaseModel):
-    """Target database platform configuration at workspace level."""
+    """Target database platform configuration at workspace level.
+
+    Passwords are NEVER stored here. They must be provided at runtime.
+    """
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -26,7 +29,6 @@ class WorkspacePlatformConfig(BaseModel):
     host: str
     port: int
     user: str
-    password: str | None = None
 
 
 class FieldStats(BaseModel):
@@ -74,7 +76,10 @@ class TableMeta(BaseModel):
 
 
 class DataSource(BaseModel):
-    """A configured data source."""
+    """A configured data source.
+
+    Passwords are NEVER stored. They must be provided at runtime.
+    """
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -85,16 +90,14 @@ class DataSource(BaseModel):
     port: int
     database: str
     user: str
-    password: str | None = None  # stored plain for now; encrypt in production
     extra: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone(timedelta(hours=8))))
 
-    def connection_string(self) -> str:
-        """Build SQLAlchemy connection string."""
-        pw = self.password or ""
+    def connection_string(self, password: str = "") -> str:
+        """Build SQLAlchemy connection string (password provided at runtime)."""
         if self.db_type in (DataSourceType.MYSQL, DataSourceType.TIDB):
-            return f"mysql+pymysql://{self.user}:{pw}@{self.host}:{self.port}/{self.database}"
-        return f"postgresql+psycopg2://{self.user}:{pw}@{self.host}:{self.port}/{self.database}"
+            return f"mysql+pymysql://{self.user}:{password}@{self.host}:{self.port}/{self.database}"
+        return f"postgresql+psycopg2://{self.user}:{password}@{self.host}:{self.port}/{self.database}"
 
 
 class SourceExploreReport(BaseModel):
@@ -176,6 +179,7 @@ class RequirementAssessment(BaseModel):
     field_mappings: list[FieldMapping] = Field(default_factory=list)
     risks: list[AssessmentRisk] = Field(default_factory=list)
     notes: str = ""
+    reapproval_reason: str = ""
     assessed_at: datetime | None = None
 
 

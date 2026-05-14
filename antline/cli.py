@@ -57,7 +57,6 @@ DEFAULT_CONFIG = {
         "host": "localhost",
         "port": 5432,
         "user": "",
-        "password": "",
     },
     "paths": {
         "sources": "sources",
@@ -66,38 +65,6 @@ DEFAULT_CONFIG = {
         "reports": "reports",
     },
 }
-
-
-def _validate_platform_connection(
-    db_type: DataSourceType,
-    host: str,
-    port: int,
-    user: str,
-    password: str,
-) -> None:
-    """Validate that the database platform is reachable."""
-    from sqlalchemy import create_engine, text
-
-    if db_type == DataSourceType.POSTGRESQL:
-        admin_db = "postgres"
-    elif db_type in (DataSourceType.MYSQL, DataSourceType.TIDB):
-        admin_db = "mysql"
-    else:
-        return
-
-    if db_type == DataSourceType.POSTGRESQL:
-        conn_str = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{admin_db}"
-    else:
-        conn_str = f"mysql+pymysql://{user}:{password}@{host}:{port}/{admin_db}"
-
-    try:
-        engine = create_engine(conn_str, connect_args={"connect_timeout": 5})
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-    except Exception as exc:
-        raise ConnectionError(
-            f"Could not connect to {db_type.value} at {host}:{port} (user={user}): {exc}"
-        ) from exc
 
 
 @app.command()
@@ -109,14 +76,17 @@ def init(
     ),
     host: str = typer.Option("localhost", "--host", "-h", help="Database host"),
     port: int = typer.Option(5432, "--port", "-P", help="Database port"),
-    user: str = typer.Option("", "--user", "-u", help="Database user"),
-    password: str = typer.Option(
-        "", "--password", prompt=True, hide_input=True, help="Database password"
+    user: str = typer.Option("", "--user", "-u", help="Database user for connection test"),
+    password: str = typer.Option("", "--password", help="Database password for connection test"),
+    no_test_connection: bool = typer.Option(
+        False, "--no-test-connection", help="Skip connection validation"
     ),
-    no_test: bool = typer.Option(False, "--no-test-connection", help="Skip connection validation"),
     force: bool = typer.Option(False, "--force", help="Overwrite existing config"),
 ) -> None:
-    """Initialize a new Antline workspace with platform configuration."""
+    """Initialize a new Antline workspace with platform configuration.
+
+    Credentials are used for connection validation only and never stored.
+    """
     root = path.resolve()
     root.mkdir(parents=True, exist_ok=True)
 
@@ -125,14 +95,34 @@ def init(
         console.print(f"[yellow]Already initialized:[/] {config_path}")
         raise typer.Exit(0)
 
-    # Validate platform connectivity
-    if not no_test:
-        console.print(f"[dim]Validating {db_type.value} connection to {host}:{port} …[/]")
-        try:
-            _validate_platform_connection(db_type, host, port, user, password)
-        except ConnectionError as exc:
-            console.print(f"[red]{exc}[/]")
-            raise typer.Exit(1) from None
+    # Validate connection before writing config
+    if not no_test_connection:
+        if not user:
+            user = typer.prompt("Database user")
+        if not password:
+            password = typer.prompt("Database password", hide_input=True)
+
+        console.print(f"[dim]Testing connection to {db_type.value} @ {host}:{port} …[/]", end=" ")
+        from sqlalchemy import create_engine, text
+
+        if db_type.value == "postgresql":
+            admin_db = "postgres"
+            conn_str = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{admin_db}"
+        elif db_type.value in ("mysql", "tidb"):
+            admin_db = "mysql"
+            conn_str = f"mysql+pymysql://{user}:{password}@{host}:{port}/{admin_db}"
+        else:
+            conn_str = ""
+
+        if conn_str:
+            try:
+                engine = create_engine(conn_str, connect_args={"connect_timeout": 3})
+                with engine.connect() as conn:
+                    conn.execute(text("SELECT 1"))
+                console.print("[green]ok[/]")
+            except Exception as exc:
+                console.print(f"[red]failed[/]\n  {exc}")
+                raise typer.Exit(1) from None
 
     config = DEFAULT_CONFIG.copy()
     config["project"]["name"] = name or root.name
@@ -140,8 +130,6 @@ def init(
         "db_type": db_type.value,
         "host": host,
         "port": port,
-        "user": user,
-        "password": password,
     }
 
     with open(config_path, "w", encoding="utf-8") as f:

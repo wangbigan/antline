@@ -12,9 +12,8 @@ def test_datasource_connection_string_postgresql():
         port=5432,
         database="mydb",
         user="user",
-        password="pass",
     )
-    assert src.connection_string() == "postgresql+psycopg2://user:pass@localhost:5432/mydb"
+    assert src.connection_string("pass") == "postgresql+psycopg2://user:pass@localhost:5432/mydb"
 
 
 def test_datasource_connection_string_mysql():
@@ -26,9 +25,8 @@ def test_datasource_connection_string_mysql():
         port=3306,
         database="mydb",
         user="user",
-        password="pass",
     )
-    assert src.connection_string() == "mysql+pymysql://user:pass@localhost:3306/mydb"
+    assert src.connection_string("pass") == "mysql+pymysql://user:pass@localhost:3306/mydb"
 
 
 def test_datasource_connection_string_tidb():
@@ -40,9 +38,8 @@ def test_datasource_connection_string_tidb():
         port=4000,
         database="mydb",
         user="user",
-        password="pass",
     )
-    assert src.connection_string() == "mysql+pymysql://user:pass@localhost:4000/mydb"
+    assert src.connection_string("pass") == "mysql+pymysql://user:pass@localhost:4000/mydb"
 
 
 def test_requirement_default_status():
