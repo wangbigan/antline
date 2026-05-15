@@ -466,34 +466,49 @@ def _generate_map_models(
         if not req:
             continue
 
+        # Build target schema field lookup for metadata comments
+        schema_fields: dict[str, dict[str, Any]] = {}
+        for schema in req.target_schemas:
+            schema_fields[schema.table] = {f.name: f for f in schema.fields}
+
         for target_table, mappings in target_tables.items():
             model_name = f"map_{target_table}"
+            field_meta = schema_fields.get(target_table, {})
 
             # Build field SQL lines
             fields_sql: list[str] = []
             for m in mappings:
                 target_field = m.target_field.split(".")[-1]
 
+                # Compose metadata comment from target schema (same style as clean layer)
+                tf = field_meta.get(target_field)
+                if tf:
+                    null_str = "nullable" if tf.nullable else "NOT NULL"
+                    desc_part = f": {tf.description}" if tf.description else ""
+                    meta = f"{tf.data_type} {null_str}{desc_part}"
+                else:
+                    meta = "unknown type"
+
                 if m.mapping_type == "direct" and m.source_field:
                     fields_sql.append(
-                        f"    {m.source_field} AS {target_field},  -- direct from {m.source_table}"
+                        f"    {m.source_field} AS {target_field},  -- {meta} | direct from {m.source_table}"
                     )
                 elif m.mapping_type == "transform" and m.source_field:
                     if m.transform_logic:
                         fields_sql.append(f"    -- TODO: {m.transform_logic}")
                         fields_sql.append(
-                            f"    {m.source_field} AS {target_field},  -- transform from {m.source_table}"
+                            f"    {m.source_field} AS {target_field},  -- {meta} | transform from {m.source_table}"
                         )
                     else:
                         fields_sql.append(
-                            f"    {m.source_field} AS {target_field},  -- TODO: transform from {m.source_table}"
+                            f"    {m.source_field} AS {target_field},  -- {meta} | transform from {m.source_table}"
                         )
                 elif m.mapping_type == "merge":
                     fields_sql.append(
-                        f"    NULL AS {target_field},  -- TODO: merge from multiple sources"
+                        f"    NULL AS {target_field},  -- {meta} | merge: TODO from multiple sources"
                     )
                 else:  # missing or unmapped
-                    fields_sql.append(f"    NULL AS {target_field},  -- missing: no source mapping")
+                    fields_sql.append(f"    NULL AS {target_field},  -- {meta} | missing: no source mapping")
 
             # Remove trailing comma from the last field line so "FROM" doesn't follow ","
             if fields_sql:
@@ -534,8 +549,17 @@ FROM {from_ref}
             (models_dir / f"{model_name}.sql").write_text(sql)
 
 
-def _generate_clean_models(project: Project, state: ProjectState, dbt_dir: Path) -> None:
-    """Generate clean layer model templates from target schemas."""
+def _generate_clean_models(
+    project: Project,
+    state: ProjectState,
+    dbt_dir: Path,
+    req_mappings: dict[str, dict[str, list[FieldMapping]]],
+) -> None:
+    """Generate clean layer model templates from target schemas.
+
+    Only generates models for target_tables that appear in field_mappings (same
+    as map layer), ensuring every clean model has a corresponding map model.
+    """
     models_dir = dbt_dir / "models" / "clean"
     models_dir.mkdir(parents=True, exist_ok=True)
 
@@ -548,8 +572,17 @@ def _generate_clean_models(project: Project, state: ProjectState, dbt_dir: Path)
         if not req or not req.target_schemas:
             continue
 
-        for schema in req.target_schemas:
-            model_name = f"clean_{schema.table}"
+        # Build a lookup: table name -> TargetSchema
+        schema_by_table = {s.table: s for s in req.target_schemas}
+        # Only iterate target_tables present in field_mappings (same as map layer)
+        target_tables = req_mappings.get(req_id, {})
+
+        for target_table in target_tables:
+            schema = schema_by_table.get(target_table)
+            if not schema:
+                continue
+
+            model_name = f"clean_{target_table}"
 
             # Build explicit field list with type/constraint/comment annotations
             field_lines: list[str] = []
@@ -564,7 +597,7 @@ def _generate_clean_models(project: Project, state: ProjectState, dbt_dir: Path)
 
             fields_block = "\n".join(field_lines)
 
-            sql = f"""-- Clean layer: {schema.table}
+            sql = f"""-- Clean layer: {target_table}
 -- Requirement: {req_id}
 --
 -- TODO: Add data cleaning logic:
@@ -576,7 +609,7 @@ def _generate_clean_models(project: Project, state: ProjectState, dbt_dir: Path)
 
 SELECT
 {fields_block}
-FROM {{{{ ref('map_{schema.table}') }}}}
+FROM {{{{ ref('map_{target_table}') }}}}
 """
             (models_dir / f"{model_name}.sql").write_text(sql)
 
@@ -722,6 +755,8 @@ def _validate_db_credentials(
     If db_name is provided, connect directly to it. Otherwise connect to
     the admin database (postgres/mysql) to verify credentials only.
     """
+    import socket
+
     from sqlalchemy import create_engine, text
 
     if db_type == "postgresql":
@@ -732,6 +767,19 @@ def _validate_db_credentials(
         conn_str = f"mysql+pymysql://{user}:{password}@{host}:{port}/{target}"
     else:
         return
+
+    # Fast TCP connectivity probe with reliable socket-level timeout.
+    try:
+        sock = socket.create_connection((host, port), timeout=3)
+        sock.close()
+    except socket.timeout:
+        raise ConnectionError(
+            f"Could not connect to {db_type} at {host}:{port}: TCP timeout"
+        ) from None
+    except OSError as exc:
+        raise ConnectionError(
+            f"Could not connect to {db_type} at {host}:{port}: {exc}"
+        ) from exc
 
     try:
         engine = create_engine(conn_str, connect_args={"connect_timeout": 3})
@@ -881,7 +929,7 @@ def scaffold(
     _generate_sources_yml(prj, state, dbt_dir, used_tables, source_mode=source_mode)
     _generate_row_models(prj, state, dbt_dir, used_tables)
     _generate_map_models(prj, state, dbt_dir, req_mappings)
-    _generate_clean_models(prj, state, dbt_dir)
+    _generate_clean_models(prj, state, dbt_dir, req_mappings)
 
     fdw_script = None
     if source_mode == "fdw":
