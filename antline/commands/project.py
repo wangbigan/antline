@@ -15,6 +15,7 @@ from rich.table import Table
 
 from antline.core.audit import log_operation
 from antline.core.config import ProjectState
+from antline.core.extract import extract_source_to_ods
 from antline.core.git import git_add_all, git_commit
 from antline.core.models import (
     FieldMapping,
@@ -508,7 +509,9 @@ def _generate_map_models(
                         f"    NULL AS {target_field},  -- {meta} | merge: TODO from multiple sources"
                     )
                 else:  # missing or unmapped
-                    fields_sql.append(f"    NULL AS {target_field},  -- {meta} | missing: no source mapping")
+                    fields_sql.append(
+                        f"    NULL AS {target_field},  -- {meta} | missing: no source mapping"
+                    )
 
             # Remove trailing comma from the last field line so "FROM" doesn't follow ","
             if fields_sql:
@@ -777,9 +780,7 @@ def _validate_db_credentials(
             f"Could not connect to {db_type} at {host}:{port}: TCP timeout"
         ) from None
     except OSError as exc:
-        raise ConnectionError(
-            f"Could not connect to {db_type} at {host}:{port}: {exc}"
-        ) from exc
+        raise ConnectionError(f"Could not connect to {db_type} at {host}:{port}: {exc}") from exc
 
     try:
         engine = create_engine(conn_str, connect_args={"connect_timeout": 3})
@@ -787,8 +788,7 @@ def _validate_db_credentials(
             conn.execute(text("SELECT 1"))
     except Exception as exc:
         raise ConnectionError(
-            f"Could not connect to {db_type} at {host}:{port} "
-            f"(user={user}, db={target}): {exc}"
+            f"Could not connect to {db_type} at {host}:{port} (user={user}, db={target}): {exc}"
         ) from exc
 
 
@@ -806,9 +806,7 @@ def scaffold(
     user: str = typer.Option(
         "", "--user", "-u", help="Database user (defaults to workspace platform user)"
     ),
-    password: str = typer.Option(
-        "", "--password", help="Database password"
-    ),
+    password: str = typer.Option("", "--password", help="Database password"),
 ) -> None:
     """Generate dbt project scaffolding from approved requirement assessments.
 
@@ -862,8 +860,7 @@ def scaffold(
             resolved_password = typer.prompt("Database password", hide_input=True)
 
         console.print(
-            f"[dim]Checking database connection ({resolved_user}@{host}:{port}) "
-            f"— timeout 3s …[/]"
+            f"[dim]Checking database connection ({resolved_user}@{host}:{port}) — timeout 3s …[/]"
         )
         try:
             _validate_db_credentials(
@@ -923,9 +920,7 @@ def scaffold(
 
     # Generate all dbt files
     _generate_dbt_project_yml(prj, dbt_dir)
-    _generate_dbt_profile(
-        prj, dbt_dir, target_db_type, host, port, resolved_user, target_db
-    )
+    _generate_dbt_profile(prj, dbt_dir, target_db_type, host, port, resolved_user, target_db)
     _generate_sources_yml(prj, state, dbt_dir, used_tables, source_mode=source_mode)
     _generate_row_models(prj, state, dbt_dir, used_tables)
     _generate_map_models(prj, state, dbt_dir, req_mappings)
@@ -973,14 +968,210 @@ def scaffold(
 
 
 @app.command()
+def extract(
+    prj_id: str = typer.Argument(..., help="Project ID"),
+    source_id: str = typer.Option("", "--source", "-s", help="仅提取指定源 (默认: 所有项目引用源)"),
+    batch_size: int = typer.Option(10000, "--batch-size", help="批量插入大小"),
+    target_user: str = typer.Option(
+        "", "--target-user", "-u", help="目标数据库用户 (默认使用 workspace 配置)"
+    ),
+    target_password: str = typer.Option("", "--target-password", help="目标数据库密码"),
+) -> None:
+    """Extract source tables into target database ODS layer for sync mode.
+
+    Connects to each source database, reads the tables referenced in the
+    project's requirement assessments, and copies them into the target
+    database under ``ods_<source_id>`` schemas.
+
+    This command must be run before ``dbt build`` when using ``sync`` source mode.
+
+    Examples:
+        antline project extract PRJ-001
+        antline project extract PRJ-001 --source SRC-20260508-001
+        antline project extract PRJ-001 --batch-size 5000
+    """
+    state = ProjectState()
+    prj = state.get_project(prj_id)
+    if not prj:
+        console.print(f"[red]Project not found:[/] {prj_id}")
+        raise typer.Exit(1)
+
+    # Read workspace platform config
+    platform = state.workspace_platform()
+    if not platform:
+        console.print(
+            "[red]Workspace platform not configured. "
+            "Run `antline init` with --db-type, --host, --port.[/]"
+        )
+        raise typer.Exit(1)
+
+    db_type = platform.get("db_type", "postgresql")
+    host = platform.get("host", "localhost")
+    port = platform.get("port", 5432)
+    db_name = platform.get("database", "")
+    target_db = db_name or prj_id.replace("-", "_").lower()
+    target_db_type = db_type.lower()
+
+    # Resolve target credentials
+    resolved_target_user = target_user or platform.get("user", "")
+    if not resolved_target_user:
+        resolved_target_user = typer.prompt("Target database user")
+    if not target_password:
+        target_password = typer.prompt("Target database password", hide_input=True)
+
+    # Validate target connection
+    console.print(
+        f"[dim]Checking target connection ({resolved_target_user}@{host}:{port}/{target_db}) "
+        f"— timeout 3s …[/]"
+    )
+    try:
+        _validate_db_credentials(
+            db_type=target_db_type,
+            host=host,
+            port=port,
+            user=resolved_target_user,
+            password=target_password,
+            db_name=target_db,
+        )
+        console.print("  [green]Target connection OK[/]")
+    except ConnectionError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(1) from None
+
+    # Build target engine
+    if target_db_type == "postgresql":
+        target_conn = (
+            f"postgresql+psycopg2://{resolved_target_user}:{target_password}"
+            f"@{host}:{port}/{target_db}"
+        )
+    elif target_db_type in ("mysql", "tidb"):
+        target_conn = (
+            f"mysql+pymysql://{resolved_target_user}:{target_password}@{host}:{port}/{target_db}"
+        )
+    else:
+        console.print(f"[red]Unsupported target db_type: {target_db_type}[/]")
+        raise typer.Exit(1)
+
+    from sqlalchemy import create_engine
+
+    target_engine = create_engine(target_conn, pool_pre_ping=True)
+
+    # Collect tables from assessments
+    used_tables, _ = _collect_scaffold_data(prj, state)
+
+    # Filter to requested source if --source specified
+    if source_id:
+        if source_id not in used_tables:
+            console.print(
+                f"[yellow]Warning:[/] Source {source_id} not used by project assessments."
+            )
+        sources_to_extract = {source_id: used_tables.get(source_id, [])}
+    else:
+        sources_to_extract = used_tables
+
+    if not sources_to_extract or all(not t for t in sources_to_extract.values()):
+        console.print(
+            "[yellow]Warning:[/] No tables to extract. "
+            "Ensure requirements have approved assessments with field mappings."
+        )
+        raise typer.Exit(0)
+
+    console.print(f"[bold]Extracting[/] {prj_id} …")
+    console.print(f"  Target: {target_db_type} @ {host}:{port}/{target_db}")
+    console.print()
+
+    total_rows = 0
+    total_success = 0
+    total_failed = 0
+
+    for sid, tables in sources_to_extract.items():
+        if not tables:
+            continue
+
+        src = state.get_source(sid)
+        if not src:
+            console.print(f"[yellow]Source config not found:[/] {sid}")
+            continue
+
+        ods_schema = f"ods_{sid.lower()}"
+        console.print(f"  Source: [bold]{sid}[/] ({src.name}) → [dim]{ods_schema}[/]")
+
+        # Prompt for source password
+        src_password = typer.prompt(f"    Database password for {sid}", hide_input=True)
+
+        # Determine source schema
+        if src.db_type.value in ("mysql", "tidb"):
+            src_schema = src.database
+        else:
+            # For PostgreSQL, try to infer from explore report
+            reports = _load_explore_reports(state, [sid])
+            if sid in reports and reports[sid].tables:
+                src_schema = reports[sid].tables[0].schema_name or None
+            else:
+                src_schema = None
+
+        job_result = extract_source_to_ods(
+            source=src,
+            source_password=src_password,
+            target_engine=target_engine,
+            tables=tables,
+            ods_schema=ods_schema,
+            source_schema=src_schema,
+            batch_size=batch_size,
+        )
+
+        for r in job_result.results:
+            status_icon = "[green]✓[/]" if r.status == "success" else "[red]✗[/]"
+            if r.status == "skipped":
+                status_icon = "[yellow]⊘[/]"
+            msg = f"      {r.table}: "
+            if r.status == "success":
+                msg += f"{r.rows_copied:,} rows copied {status_icon}"
+            elif r.status == "failed":
+                msg += f"failed {status_icon} — {r.message}"
+            else:
+                msg += f"skipped {status_icon} — {r.message}"
+            console.print(msg)
+
+        total_rows += job_result.total_rows
+        total_success += job_result.success_count
+        total_failed += job_result.failed_count
+
+    # Audit log
+    log_operation(
+        state.root,
+        "project_extract",
+        resolved_target_user,
+        f"{prj_id}",
+        {
+            "project_id": prj_id,
+            "sources": list(sources_to_extract.keys()),
+            "total_rows": total_rows,
+            "success": total_success,
+            "failed": total_failed,
+        },
+    )
+
+    git_add_all(state.root)
+    git_commit(f"extract(project): sync ODS for {prj_id}", state.root)
+
+    console.print()
+    if total_failed == 0:
+        console.print(f"[green]Extract complete:[/] {total_rows:,} rows, {total_success} table(s)")
+    else:
+        console.print(
+            f"[yellow]Extract complete with issues:[/] {total_rows:,} rows, "
+            f"{total_success} success, {total_failed} failed"
+        )
+
+
+@app.command()
 def compile(
     prj_id: str = typer.Argument(..., help="Project ID"),
     model: str = typer.Option(
         "", "--model", "-m", help="指定模型名 (如 row_patients / map_patients)"
     ),
-    user: str = typer.Option(
-        "", "--user", "-u", help="Database user (prompted if not provided)"
-    ),
+    user: str = typer.Option("", "--user", "-u", help="Database user (prompted if not provided)"),
     password: str = typer.Option(
         "", "--password", help="Database password (prompted if not provided)"
     ),
@@ -1033,9 +1224,7 @@ def compile(
 def build(
     prj_id: str = typer.Argument(..., help="Project ID"),
     version: str = typer.Option("", "--version", "-v", help="Version tag (auto if omitted)"),
-    user: str = typer.Option(
-        "", "--user", "-u", help="Database user (prompted if not provided)"
-    ),
+    user: str = typer.Option("", "--user", "-u", help="Database user (prompted if not provided)"),
     password: str = typer.Option(
         "", "--password", help="Database password (prompted if not provided)"
     ),
@@ -1102,9 +1291,7 @@ def build(
 @app.command()
 def validate(
     prj_id: str = typer.Argument(..., help="Project ID"),
-    user: str = typer.Option(
-        "", "--user", "-u", help="Database user (prompted if not provided)"
-    ),
+    user: str = typer.Option("", "--user", "-u", help="Database user (prompted if not provided)"),
     password: str = typer.Option(
         "", "--password", help="Database password (prompted if not provided)"
     ),

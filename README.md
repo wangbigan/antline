@@ -533,7 +533,7 @@ ruff check antline/ tests/
 - [x] Audit logging for compliance
 - [x] Approval validation against explore reports
 - [x] Re-approval for IN_PROJECT requirements with notes
-- [ ] Extract job (physical data sync for sync mode)
+- [x] Extract job (physical data sync for sync mode)
 - [ ] Schedule command (cron wrapper / Airflow DAG generation)
 - [ ] Plugin system for custom ETL backends
 - [ ] Web UI (lightweight)
