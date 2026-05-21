@@ -1,0 +1,9 @@
+id: SRC-20260521-001
+name: testdb
+db_type: postgresql
+host: localhost
+port: 5432
+database: testdb
+user: testuser
+extra: {}
+created_at: '2026-05-21T11:33:59.135737+08:00'
