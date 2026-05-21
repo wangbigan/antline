@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import typer
 import yaml
@@ -17,6 +19,7 @@ from antline.core.csv_schema import import_schema_from_csv, save_schemas_as_yaml
 from antline.core.git import git_add_all, git_commit
 from antline.core.models import (
     AssessmentRisk,
+    CleanRule,
     FieldMapping,
     Requirement,
     RequirementAssessment,
@@ -154,16 +157,31 @@ def assess(
         help="Include full field statistics (null rates, unique counts, top values). "
         "Without --focus, applies to all tables.",
     ),
+    auto: bool = typer.Option(False, "--auto", help="使用LLM自动分析生成映射和SQL"),
+    step: str = typer.Option(
+        "",
+        "--step",
+        help="仅执行特定步骤: scope (表级分析), generate (生成SQL，需配合--scope-file)",
+    ),
+    scope_file: Path = typer.Option(None, "--scope-file", help="传入已有的scope JSON文件"),
+    json_output: bool = typer.Option(False, "--json", help="输出JSON格式结果"),
+    min_confidence: float = typer.Option(
+        0.0, "--min-confidence", help="仅显示置信度高于此值的映射"
+    ),
 ) -> None:
-    """Generate assessment materials (prompt + guide + template) for human/LLM review.
+    """Generate assessment materials for a requirement.
 
-    This command does NOT auto-generate field mappings. Instead it produces:
-    - prompt.md: an LLM prompt with target schemas and source metadata
-    - guide.md: a human-readable guide for manual assessment
-    - template.yml: an empty assessment template to be filled
+    Default mode (no --auto): produces prompt.md + guide.md + template.md for
+    manual / external LLM review.
 
-    After filling out the assessment, save it as assessment.yml and run:
-        antline requirement approve REQ-001
+    Auto mode (--auto): runs the DataRequirementAnalysisSkill pipeline to
+    automatically generate field mappings, model SQL, and clean rules.
+
+    Examples:
+        antline requirement assess REQ-001 SRC-001
+        antline requirement assess REQ-001 SRC-001 --auto
+        antline requirement assess REQ-001 SRC-001 --auto --step scope
+        antline requirement assess REQ-001 SRC-001 --auto --step generate --scope-file scope.json
     """
     state = ProjectState()
     req = state.get_requirement(req_id)
@@ -181,17 +199,7 @@ def assess(
             console.print(f"[red]Source not found:[/] {sid}")
             raise typer.Exit(1)
 
-    focus_tables = [t.strip() for t in focus.split(",") if t.strip()] or None
-
-    console.print(f"[bold]正在生成评估材料[/] {req_id} …")
-
     # Load explore reports
-    from antline.core.assessment_prompt import (
-        generate_assessment_template,
-        generate_human_guide,
-        generate_llm_prompt,
-    )
-
     reports: list[SourceExploreReport] = []
     for sid in source_ids:
         report_path = state.root / "sources" / sid / "explore" / "report.yml"
@@ -205,7 +213,119 @@ def assess(
             "[yellow]Warning:[/] No explore reports found. Run `antline source explore` first."
         )
 
-    # Generate output files
+    # ------------------------------------------------------------------
+    # Auto mode: LLM-driven analysis
+    # ------------------------------------------------------------------
+    if auto:
+        console.print(f"[bold]自动分析[/] {req_id} …")
+
+        # Try to initialise an LLM client
+        try:
+            from antline.core.analysis_skill import (
+                AnalysisResult,
+                DataRequirementAnalysisSkill,
+                create_openai_llm_call,
+            )
+
+            llm_call = create_openai_llm_call()
+        except RuntimeError as exc:
+            console.print(f"[red]LLM 未配置:[/] {exc}")
+            console.print(
+                "[yellow]提示:[/] 设置 OPENAI_API_KEY 环境变量，"
+                "或使用默认模式生成 prompt.md 后手动调用大模型。"
+            )
+            raise typer.Exit(1)
+        except Exception as exc:
+            console.print(f"[red]初始化 LLM 失败:[/] {exc}")
+            raise typer.Exit(1)
+
+        skill = DataRequirementAnalysisSkill(llm_call=llm_call)
+
+        # Partial step execution
+        if step == "scope":
+            # Only run Step 1
+            source_text = "\n\n".join(
+                _summarize_report(r) for r in reports
+            )
+            scope = skill._step1_table_scope(req.target_schemas, source_text)
+
+            if json_output:
+                console.print(json.dumps(scope, ensure_ascii=False, indent=2))
+            else:
+                console.print("[green]表级分析完成:[/]")
+                for tbl, info in scope.items():
+                    conf = info.get("confidence", 0.0)
+                    primary = info.get("primary_source", {}).get("table", "N/A")
+                    console.print(f"  {tbl}: primary={primary}, confidence={conf:.2f}")
+
+            # Save scope to assessment dir
+            assessment_dir = state.root / "requirements" / req_id / "assessment"
+            assessment_dir.mkdir(parents=True, exist_ok=True)
+            scope_path = assessment_dir / "scope.json"
+            scope_path.write_text(
+                json.dumps(scope, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            console.print(f"  Scope saved: {scope_path}")
+            return
+
+        if step == "generate":
+            # Steps 2-5 with optional pre-loaded scope
+            if scope_file and scope_file.exists():
+                scope = json.loads(scope_file.read_text())
+            else:
+                # Run step 1 first
+                source_text = "\n\n".join(
+                    _summarize_report(r) for r in reports
+                )
+                scope = skill._step1_table_scope(req.target_schemas, source_text)
+
+            result = AnalysisResult(source_scope=scope)
+            source_text = "\n\n".join(
+                _summarize_report(r) for r in reports
+            )
+
+            for ts in req.target_schemas:
+                table_scope = scope.get(ts.table, {})
+                if not table_scope:
+                    continue
+                step2 = skill._step2_generate_sql(ts, table_scope, source_text)
+                map_sql = step2.get("map_sql", "")
+                uncovered = _audit_coverage(map_sql, [f.name for f in ts.fields])
+                if uncovered:
+                    gap_fill = skill._step4_gap_fill(uncovered, ts.table, source_text)
+                    map_sql = _merge_gaps_into_sql(map_sql, gap_fill)
+                    uncovered = _audit_coverage(map_sql, [f.name for f in ts.fields])
+                result.model_sqls[ts.table] = map_sql
+                result.uncovered_fields.extend(f"{ts.table}.{f}" for f in uncovered)
+                for cr_data in step2.get("clean_rules", []):
+                    try:
+                        result.clean_rules.append(CleanRule.model_validate(cr_data))
+                    except Exception:
+                        pass
+
+            _save_auto_assessment(state, req, result, source_ids)
+            _print_auto_result(result, json_output, min_confidence)
+            return
+
+        # Full pipeline (steps 0-5)
+        result = skill.analyze(req, reports)
+        _save_auto_assessment(state, req, result, source_ids)
+        _print_auto_result(result, json_output, min_confidence)
+        return
+
+    # ------------------------------------------------------------------
+    # Default mode: generate prompts for manual/external review
+    # ------------------------------------------------------------------
+    focus_tables = [t.strip() for t in focus.split(",") if t.strip()] or None
+
+    console.print(f"[bold]正在生成评估材料[/] {req_id} …")
+
+    from antline.core.assessment_prompt import (
+        generate_assessment_template,
+        generate_human_guide,
+        generate_llm_prompt,
+    )
+
     assessment_dir = state.root / "requirements" / req_id / "assessment"
     assessment_dir.mkdir(parents=True, exist_ok=True)
 
@@ -222,7 +342,6 @@ def assess(
     with open(template_path, "w", encoding="utf-8") as f:
         f.write(generate_assessment_template(req, source_ids))
 
-    # Update requirement status
     req.status = RequirementStatus.ASSESSED
     state.save_requirement(req)
 
@@ -237,6 +356,112 @@ def assess(
     console.print("  1. 将 prompt.md 的内容复制给大模型，获取评估结果")
     console.print("  2. 人工审核修改后，保存为 assessment.md")
     console.print(f"  3. 审批通过: [bold]antline requirement approve {req_id}[/]")
+
+
+def _summarize_report(report: SourceExploreReport) -> str:
+    """Local copy of the summariser so we don't need to import it here."""
+    from antline.core.analysis_skill import _summarize_report as fn
+    return fn(report)
+
+
+def _audit_coverage(sql: str, target_fields: list[str]) -> list[str]:
+    """Local wrapper for coverage audit."""
+    from antline.core.analysis_skill import _audit_coverage as fn
+    return fn(sql, target_fields)
+
+
+def _merge_gaps_into_sql(base_sql: str, gap_fill: list[dict[str, Any]]) -> str:
+    """Local wrapper for SQL merge."""
+    from antline.core.analysis_skill import _merge_gaps_into_sql as fn
+    return fn(base_sql, gap_fill)
+
+
+def _save_auto_assessment(
+    state: ProjectState,
+    req: Requirement,
+    result: "AnalysisResult",
+    source_ids: list[str],
+) -> None:
+    """Persist an auto-generated assessment into the requirement."""
+    from antline.core.analysis_skill import AnalysisResult
+
+    assessment = RequirementAssessment(
+        feasible=True,
+        report_path="auto-generated",
+        source_ids=list(source_ids),
+        field_mappings=result.field_mappings,
+        clean_rules=result.clean_rules,
+        risks=result.risks,
+        notes="Auto-assessed by DataRequirementAnalysisSkill",
+        assessed_at=datetime.now(timezone(timedelta(hours=8))),
+        engine_version="2.0-llm",
+        auto_assessed=True,
+        model_sqls=result.model_sqls,
+        source_scope=result.source_scope,
+    )
+    req.assessment = assessment
+    req.status = RequirementStatus.ASSESSED
+    state.save_requirement(req)
+
+    # Save artifacts to assessment dir for human review
+    assessment_dir = state.root / "requirements" / req.id / "assessment"
+    assessment_dir.mkdir(parents=True, exist_ok=True)
+
+    scope_path = assessment_dir / "scope.json"
+    scope_path.write_text(
+        json.dumps(result.source_scope, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    for model_name, sql in result.model_sqls.items():
+        sql_path = assessment_dir / f"{model_name}.sql"
+        sql_path.write_text(sql, encoding="utf-8")
+
+    git_add_all(state.root)
+    git_commit(f"feat(requirement): auto-assess {req.id}", state.root)
+
+
+def _print_auto_result(
+    result: "AnalysisResult",
+    json_output: bool,
+    min_confidence: float,
+) -> None:
+    """Print analysis result to console."""
+    from antline.core.analysis_skill import AnalysisResult
+
+    if json_output:
+        console.print(
+            json.dumps(
+                {
+                    "source_scope": result.source_scope,
+                    "model_sqls": result.model_sqls,
+                    "field_mappings": [
+                        m.model_dump(mode="json")
+                        for m in result.field_mappings
+                        if m.confidence >= min_confidence
+                    ],
+                    "clean_rules": [cr.model_dump(mode="json") for cr in result.clean_rules],
+                    "uncovered_fields": result.uncovered_fields,
+                    "confidence": result.confidence,
+                    "approval_recommendation": result.approval_recommendation,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+
+    console.print("[green]自动分析完成[/]")
+    console.print(f"  置信度: {result.confidence:.2f}")
+    console.print(f"  建议: {result.approval_recommendation}")
+    console.print(f"  模型SQL: {len(result.model_sqls)} 个")
+    if result.uncovered_fields:
+        console.print(f"  [yellow]未覆盖字段: {len(result.uncovered_fields)} 个[/]")
+        for f in result.uncovered_fields:
+            console.print(f"    - {f}")
+    if result.risks:
+        console.print(f"  风险: {len(result.risks)} 个")
+        for r in result.risks:
+            console.print(f"    [{r.level}] {r.description}")
 
 
 @app.command()

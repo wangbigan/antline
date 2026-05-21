@@ -18,6 +18,7 @@ from antline.core.config import ProjectState
 from antline.core.extract import extract_source_to_ods
 from antline.core.git import git_add_all, git_commit
 from antline.core.models import (
+    CleanRule,
     FieldMapping,
     Project,
     ProjectStatus,
@@ -454,7 +455,11 @@ def _generate_map_models(
     dbt_dir: Path,
     req_mappings: dict[str, dict[str, list[FieldMapping]]],
 ) -> None:
-    """Generate map layer models from field mappings in assessment."""
+    """Generate map layer models from field mappings in assessment.
+
+    If assessment contains model_sqls (from --auto analysis), writes the
+    full SQL directly. Otherwise falls back to field-by-field scaffolding.
+    """
     models_dir = dbt_dir / "models" / "map"
     models_dir.mkdir(parents=True, exist_ok=True)
 
@@ -467,13 +472,26 @@ def _generate_map_models(
         if not req:
             continue
 
-        # Build target schema field lookup for metadata comments
-        schema_fields: dict[str, dict[str, Any]] = {}
-        for schema in req.target_schemas:
-            schema_fields[schema.table] = {f.name: f for f in schema.fields}
+        # Prefer full model SQL when available (from auto-assessment)
+        model_sqls: dict[str, str] = {}
+        if req.assessment:
+            model_sqls = req.assessment.model_sqls or {}
 
         for target_table, mappings in target_tables.items():
             model_name = f"map_{target_table}"
+
+            # === Path A: use full model SQL from assessment ===
+            if target_table in model_sqls and model_sqls[target_table]:
+                sql = model_sqls[target_table]
+                (models_dir / f"{model_name}.sql").write_text(sql)
+                continue
+
+            # === Path B: fallback to field-by-field scaffolding ===
+            # Build target schema field lookup for metadata comments
+            schema_fields: dict[str, dict[str, Any]] = {}
+            for schema in req.target_schemas:
+                schema_fields[schema.table] = {f.name: f for f in schema.fields}
+
             field_meta = schema_fields.get(target_table, {})
 
             # Build field SQL lines
@@ -580,6 +598,12 @@ def _generate_clean_models(
         # Only iterate target_tables present in field_mappings (same as map layer)
         target_tables = req_mappings.get(req_id, {})
 
+        # Build clean_rules lookup from assessment: target_field -> CleanRule
+        clean_rules_by_field: dict[str, CleanRule] = {}
+        if req.assessment and req.assessment.clean_rules:
+            for cr in req.assessment.clean_rules:
+                clean_rules_by_field[cr.target_field] = cr
+
         for target_table in target_tables:
             schema = schema_by_table.get(target_table)
             if not schema:
@@ -587,29 +611,58 @@ def _generate_clean_models(
 
             model_name = f"clean_{target_table}"
 
-            # Build explicit field list with type/constraint/comment annotations
+            # Build explicit field list, applying clean_rules when available
             field_lines: list[str] = []
+            has_transforms = False
             for f in schema.fields:
-                null_str = "nullable" if f.nullable else "NOT NULL"
-                comment_part = f": {f.description}" if f.description else ""
-                field_lines.append(f"    {f.name},     -- {f.data_type} {null_str}{comment_part}")
+                field_key = f"{target_table}.{f.name}"
+                rule = clean_rules_by_field.get(field_key)
+
+                if rule and rule.rules:
+                    has_transforms = True
+                    expr = f.name
+                    for r in rule.rules:
+                        if r == "trim_whitespace":
+                            expr = f"TRIM({expr})"
+                        elif r == "uppercase":
+                            expr = f"UPPER({expr})"
+                        elif r == "lowercase":
+                            expr = f"LOWER({expr})"
+                        elif r == "cast_type" and rule.cast_target_type:
+                            expr = f"CAST({expr} AS {rule.cast_target_type})"
+                        elif r == "coalesce_null":
+                            default = rule.coalesce_default or "NULL"
+                            expr = f"COALESCE({expr}, {default})"
+                        elif r == "standardize_date":
+                            expr = f"CAST({expr} AS DATE)  -- TODO: standardize date format"
+                        elif r == "deduplicate":
+                            expr = f"{expr}  -- TODO: deduplicate with ROW_NUMBER() OVER (...)"
+                    field_lines.append(
+                        f"    {expr} AS {f.name},"
+                    )
+                else:
+                    field_lines.append(f"    {f.name},")
 
             # Remove trailing comma from last field so "FROM" doesn't follow ","
             if field_lines:
-                field_lines[-1] = re.sub(r",\s+--", " --", field_lines[-1])
+                field_lines[-1] = field_lines[-1].rstrip(",")
 
             fields_block = "\n".join(field_lines)
 
-            sql = f"""-- Clean layer: {target_table}
--- Requirement: {req_id}
---
+            todo_block = ""
+            if not has_transforms:
+                todo_block = """--
 -- TODO: Add data cleaning logic:
 --   - Type casting to target schema
 --   - Null handling for required fields
 --   - Deduplication
 --   - Business rule validation
 --
+"""
 
+            sql = f"""-- Clean layer: {target_table}
+-- Requirement: {req_id}
+{todo_block}
 SELECT
 {fields_block}
 FROM {{{{ ref('map_{target_table}') }}}}

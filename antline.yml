@@ -1,0 +1,12 @@
+project:
+  name: test
+  description: ''
+platform:
+  db_type: postgresql
+  host: localhost
+  port: 5432
+paths:
+  sources: sources
+  requirements: requirements
+  projects: projects
+  reports: reports

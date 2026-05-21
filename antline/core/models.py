@@ -165,7 +165,29 @@ class FieldMapping(BaseModel):
     source_table: str | None = None
     mapping_type: Literal["direct", "transform", "missing", "merge"] = "direct"
     transform_logic: str = ""
+    transform_sql: str = ""            # 模型级SQL表达式或字段级转换片段
+    confidence: float = 0.0            # 匹配置信度 0.0-1.0
     risk: Literal["low", "medium", "high", "critical"] = "low"
+    source_meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class CleanRule(BaseModel):
+    """数据清洗规则，直接指导 clean 层 SQL 生成。"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    target_field: str
+    rules: list[Literal[
+        "cast_type",
+        "coalesce_null",
+        "trim_whitespace",
+        "uppercase",
+        "lowercase",
+        "deduplicate",
+        "standardize_date",
+    ]] = Field(default_factory=list)
+    cast_target_type: str = ""
+    coalesce_default: str = ""
 
 
 class RequirementAssessment(BaseModel):
@@ -177,10 +199,15 @@ class RequirementAssessment(BaseModel):
     report_path: str = ""
     source_ids: list[str] = Field(default_factory=list)
     field_mappings: list[FieldMapping] = Field(default_factory=list)
+    clean_rules: list[CleanRule] = Field(default_factory=list)
     risks: list[AssessmentRisk] = Field(default_factory=list)
     notes: str = ""
     reapproval_reason: str = ""
     assessed_at: datetime | None = None
+    engine_version: str = "2.0-llm"
+    auto_assessed: bool = False
+    model_sqls: dict[str, str] = Field(default_factory=dict)
+    source_scope: dict[str, Any] = Field(default_factory=dict)
 
 
 class Requirement(BaseModel):
