@@ -74,6 +74,12 @@ def _load_explore_reports(
     return reports
 
 
+# Regex to extract dbt source() refs: {{ source('SRC-XXX', 'table_name') }}
+_SOURCE_REF_PATTERN = re.compile(
+    r"\{\{\s*source\s*\(\s*['\"](.+?)['\"]\s*,\s*['\"](.+?)['\"]\s*\)\s*\}\}"
+)
+
+
 def _collect_scaffold_data(
     project: Project, state: ProjectState
 ) -> tuple[
@@ -90,11 +96,10 @@ def _collect_scaffold_data(
             continue
 
         assessment = req.assessment
+        # Collect tables from field mappings
         for m in assessment.field_mappings:
             if m.source_table:
-                # source_table may include schema prefix (e.g. "src_20260508_001.patients")
                 source_table_name = m.source_table.split(".")[-1]
-                # Determine which source this table belongs to
                 for sid in assessment.source_ids:
                     reports = _load_explore_reports(state, [sid])
                     if sid in reports:
@@ -105,6 +110,17 @@ def _collect_scaffold_data(
 
             target_table = m.target_field.split(".")[0]
             req_mappings[req_id][target_table].append(m)
+
+        # Also collect tables from model SQLs (auto-assess may JOIN tables not in field_mappings)
+        for sql in (assessment.model_sqls or {}).values():
+            for match in _SOURCE_REF_PATTERN.finditer(sql):
+                sid = match.group(1)
+                table_name = match.group(2)
+                reports = _load_explore_reports(state, [sid])
+                if sid in reports:
+                    table_names = {t.name for t in reports[sid].tables}
+                    if table_name in table_names:
+                        used_tables[sid].add(table_name)
 
     # Convert sets to sorted lists
     return {sid: sorted(list(tables)) for sid, tables in used_tables.items()}, dict(req_mappings)
@@ -132,7 +148,10 @@ def _ensure_target_database(
     else:
         return  # SQLite or unsupported: nothing to do
 
-    engine = create_engine(admin_conn, connect_args={"connect_timeout": 10})
+    kwargs = {"connect_args": {"connect_timeout": 10}}
+    if db_type == "postgresql":
+        kwargs["connect_args"]["gssencmode"] = "disable"
+    engine = create_engine(admin_conn, **kwargs)
 
     with engine.connect() as conn:
         if db_type == "postgresql":
@@ -164,7 +183,10 @@ def _ensure_target_database(
     # Create schemas in the new database (PostgreSQL only)
     if db_type == "postgresql":
         target_conn = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{db_name}"
-        target_engine = create_engine(target_conn)
+        target_engine = create_engine(
+            target_conn,
+            connect_args={"connect_timeout": 10, "gssencmode": "disable"},
+        )
         with target_engine.connect() as conn:
             for schema in ("row", "map", "clean"):
                 conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema}"'))
@@ -836,7 +858,10 @@ def _validate_db_credentials(
         raise ConnectionError(f"Could not connect to {db_type} at {host}:{port}: {exc}") from exc
 
     try:
-        engine = create_engine(conn_str, connect_args={"connect_timeout": 3})
+        kwargs = {"connect_args": {"connect_timeout": 3}}
+        if db_type == "postgresql":
+            kwargs["connect_args"]["gssencmode"] = "disable"
+        engine = create_engine(conn_str, **kwargs)
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
     except Exception as exc:
@@ -1107,7 +1132,10 @@ def extract(
 
     from sqlalchemy import create_engine
 
-    target_engine = create_engine(target_conn, pool_pre_ping=True)
+    kwargs = {"pool_pre_ping": True}
+    if target_db_type == "postgresql":
+        kwargs["connect_args"] = {"gssencmode": "disable"}
+    target_engine = create_engine(target_conn, **kwargs)
 
     # Collect tables from assessments
     used_tables, _ = _collect_scaffold_data(prj, state)

@@ -33,6 +33,9 @@ def get_engine(source: DataSource, password: str = "") -> Engine:
     # SQLite does not support connect_timeout
     if "sqlite" not in conn_str:
         kwargs["connect_args"] = {"connect_timeout": 10}
+        # Disable GSSAPI encryption on macOS to avoid "Cannot find KDC for realm" errors
+        if source.db_type.value == "postgresql":
+            kwargs["connect_args"]["gssencmode"] = "disable"
     return create_engine(conn_str, **kwargs)
 
 

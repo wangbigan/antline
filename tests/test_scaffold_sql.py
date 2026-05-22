@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
 import tempfile
 from datetime import date
 from pathlib import Path
@@ -79,6 +78,7 @@ def auto_assessed_project(monkeypatch) -> tuple[Path, str]:
         req_dir = root / "requirements" / req_id
         assessment_yml = req_dir / "requirement.yml"
         req_data = yaml.safe_load(assessment_yml.read_text())
+        req_data["status"] = "assessed"
         req_data["assessment"] = {
             "feasible": True,
             "source_ids": [src_id],
@@ -177,6 +177,7 @@ class TestScaffoldModelSqls:
             req_dir = root / "requirements" / req_id
             assessment_yml = req_dir / "requirement.yml"
             req_data = yaml.safe_load(assessment_yml.read_text())
+            req_data["status"] = "assessed"
             req_data["assessment"] = {
                 "feasible": True,
                 "source_ids": [src_id],

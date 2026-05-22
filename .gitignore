@@ -73,3 +73,7 @@ Thumbs.db
 target/
 dbt_packages/
 logs/
+
+# Local test dirs
+test2/
+test3/

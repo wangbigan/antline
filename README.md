@@ -7,7 +7,7 @@ It provides a structured CLI workflow for data teams (and agents) to:
 
 1. **Explore** data sources — metadata, statistics, sample data
 2. **Define** data requirements — target schema from CSV or YAML
-3. **Assess** feasibility — automatic field mapping + risk analysis
+3. **Assess** feasibility — LLM-driven intelligent analysis with "generate → audit → patch" feedback loop, producing model-level SQL directly
 4. **Build** data pipelines — dbt-native scaffolding (row / map / clean)
 5. **Validate** data quality — dbt tests + custom checks
 6. **Deliver** production data — versioned, auditable, reproducible
@@ -53,9 +53,14 @@ antline requirement add-schema REQ-20260508-001 target_schema/patients.yaml
 antline requirement add-schema REQ-20260508-001 target_schema/hosp/
 antline requirement add-schema REQ-20260508-001 standard_schema.csv
 
-# Assess feasibility against source data (draft for review)
-antline requirement assess REQ-20260508-001 SRC-20260508-001
+# Assess feasibility (two modes)
 
+# Option A: Auto-analysis with LLM (recommended for agents)
+# Runs a 5-step pipeline: table scope → SQL generation → coverage audit → gap-fill → merge
+antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto
+
+# Option B: Manual review (generates prompt.md + guide.md + template.md)
+antline requirement assess REQ-20260508-001 SRC-20260508-001
 # After reviewing assessment materials and saving as assessment.md:
 antline requirement approve REQ-20260508-001
 
@@ -205,7 +210,7 @@ IDs are sequential within the same date. Cross-date IDs do not interfere with ea
 | `antline requirement list [--json]` | List all requirements |
 | `antline requirement show REQ-xxx` | Show requirement details |
 | `antline requirement add-schema REQ-xxx PATH [PATH ...]` | Add target schema YAML(s), directory, or CSV to a requirement |
-| `antline requirement assess REQ-xxx SRC-xxx [SRC-yyy ...] [--focus TABLES] [--full]` | Generate LLM prompt + human guide + Markdown template for review |
+| `antline requirement assess REQ-xxx SRC-xxx [SRC-yyy ...] [--focus TABLES] [--full] [--auto] [--step {scope\|generate}] [--scope-file PATH] [--json] [--min-confidence N]` | Generate assessment. Default: prompt.md + guide.md + template.md. `--auto`: LLM-driven 5-step analysis producing model SQL + clean rules |
 | `antline requirement approve REQ-xxx [--file PATH] [--force] [--note TEXT]` | Confirm requirement after reviewing assessment.md. Validates source_table/field references against explore reports. Use `--force` to bypass validation or re-approve an IN_PROJECT requirement (requires `--note`). |
 | `antline requirement update REQ-xxx ...` | Update requirement (resets assessment) |
 | `antline requirement remove REQ-xxx [--force]` | Remove a requirement |
@@ -323,8 +328,20 @@ antline requirement add-schema REQ-20260508-001 target_schema/patients.yaml
 antline requirement add-schema REQ-20260508-001 target_schema/hosp/
 antline requirement add-schema REQ-20260508-001 hospital_standard.csv
 
-# Assess feasibility — generates prompts and template (does NOT auto-map)
-# Default: table/field metadata only, no statistics
+# 3. Assess feasibility — two modes available:
+
+# Mode A: Auto-analysis with LLM (recommended for agents)
+# Runs 5-step pipeline: table scope → SQL generation → coverage audit → gap-fill → merge
+# Produces model-level SQL + clean rules directly, no manual template filling needed
+antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto
+
+# Step-by-step: only analyze table scope (Step 1), output JSON
+antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto --step scope --json
+
+# Step-by-step: generate SQL from an existing scope file (Steps 2-5)
+antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto --step generate --scope-file scope.json
+
+# Mode B: Manual review (generates prompt.md + guide.md + template.md)
 antline requirement assess REQ-20260508-001 SRC-20260508-001
 
 # Focus on specific tables only
@@ -333,7 +350,11 @@ antline requirement assess REQ-20260508-001 SRC-20260508-001 --focus patient_inf
 # Include full field statistics (null rates, unique counts, top values)
 antline requirement assess REQ-20260508-001 SRC-20260508-001 --full
 
-# Review the generated materials, save as assessment.md, then approve
+# 4. Approve
+# For auto-assessment: approve directly (assessment already in requirement.yml)
+antline requirement approve REQ-20260508-001
+
+# For manual assessment: review materials, save as assessment.md, then approve
 # Approval validates source_table/source_field against explore reports
 antline requirement approve REQ-20260508-001
 
@@ -342,8 +363,12 @@ antline requirement approve REQ-20260508-001
 antline requirement approve REQ-20260508-001 --force
 ```
 
-**Design note:** `assess` does NOT auto-generate field mappings. It produces
-files in `requirements/REQ-xxx/assessment/` for human or LLM review:
+**Design note:** `assess` supports two modes:
+
+| Mode | Flag | Output | Best for |
+|------|------|--------|----------|
+| Auto (LLM) | `--auto` | `model_sqls` + `clean_rules` + `field_mappings` + `scope.json` | Agents / automated pipelines |
+| Manual | (default) | `prompt.md` + `guide.md` + `template.md` | Human review / external LLM |
 
 | File | Purpose |
 |------|---------|
@@ -353,6 +378,24 @@ files in `requirements/REQ-xxx/assessment/` for human or LLM review:
 
 Copy the prompt to an LLM, review the output, save it as `assessment.md`,
 then run `approve` to store the assessment in the requirement.
+
+**Auto-assessment 5-step pipeline** (`--auto`):
+
+```
+Step 0: Context Preparation    → Summarise explore reports into LLM-friendly text
+Step 1: Table Scope Analysis   → Which source tables feed each target table (with JOIN relations)
+Step 2: Model SQL Generation   → Full dbt model SQL for each target table
+Step 3: Coverage Audit         → AST parse SQL, diff against target schema (deterministic, no LLM)
+Step 4: Gap-fill Search        → Find mappings for uncovered fields across ALL source tables
+Step 5: Model Merge            → Incrementally patch gaps back into the SQL
+```
+
+Benefits:
+- **Token-efficient**: Step 1 uses wide context (all tables), Steps 2-5 use narrow context (scoped tables only)
+- **High coverage**: Audit + gap-fill ensures no target field is left unmapped
+- **Model-level SQL**: Output is a complete `SELECT ... FROM ... JOIN ...` statement, not field-by-field mappings
+- **Clean rules**: Automatically generates `clean_rules` (CAST, COALESCE, TRIM, UPPER, etc.) for the clean layer
+- **Audit trail**: Produces `scope.json` + per-model `.sql` files for human review
 
 **Approval validation:** During `approve`, Antline cross-checks every
 non-`missing` mapping against the source explore reports:
@@ -385,7 +428,7 @@ Assessment output:
 ### 5. Create Project and Scaffold
 
 ```bash
-antline project create --name "患者数据集成项目" --requirements REQ-20260508-001
+antline project create --name "患者数据集成项目" --requirement REQ-20260508-001
 
 # Scaffold (credentials prompted at runtime, never stored)
 antline project scaffold PRJ-20260508-001
@@ -394,20 +437,44 @@ antline project scaffold PRJ-20260508-001
 psql -d hospital_data -f projects/PRJ-20260508-001/dbt/sql/fdw_setup.sql
 ```
 
-Generated dbt models:
+Generated dbt models (with `--auto`, model-level SQL):
+
 ```sql
 -- projects/PRJ-20260508-001/dbt/models/map/map_patients.sql
 -- Map layer: patients
 -- Requirement: REQ-20260508-001
 
 SELECT
-    patient_id AS subject_id,  -- transform from patients
-    gender AS gender,  -- direct from patients
-    age AS anchor_age,  -- transform from patients
-    EXTRACT(YEAR FROM birthday) AS anchor_year,  -- TODO: fix syntax
-    NULL AS anchor_year_group,  -- missing: no source mapping
-    NULL AS dod  -- missing: no source mapping
-FROM {{ ref('row_patients') }}
+    p.patient_id AS subject_id,
+    p.gender AS gender,
+    CAST(p.age AS INTEGER) AS anchor_age,
+    EXTRACT(YEAR FROM p.birthday) AS anchor_year,
+    -- transform: age group categorization
+    CASE
+        WHEN p.age < 18 THEN 'pediatric'
+        WHEN p.age < 65 THEN 'adult'
+        ELSE 'elderly'
+    END AS anchor_year_group,
+    v.dod AS dod
+FROM {{ source('SRC-001', 'patient_info') }} p
+LEFT JOIN {{ source('SRC-001', 'visits') }} v
+    ON p.patient_id = v.patient_id
+```
+
+Clean layer (with `clean_rules`):
+
+```sql
+-- projects/PRJ-20260508-001/dbt/models/clean/clean_patients.sql
+-- Clean layer: patients
+
+SELECT
+    patient_id,
+    UPPER(COALESCE(TRIM(gender), 'U')) AS gender,
+    CAST(anchor_age AS INTEGER) AS anchor_age,
+    CAST(anchor_year AS INTEGER) AS anchor_year,
+    anchor_year_group,
+    dod
+FROM {{ ref('map_patients') }}
 ```
 
 ### 6. Compile, Build and Validate
@@ -455,21 +522,27 @@ run(
 )
 run("antline requirement add-schema REQ-20260508-001 schema.yaml")
 
-# 4. Agent generates assessment materials (prompt + template)
-run("antline requirement assess REQ-20260508-001 SRC-20260508-001")
+# 4. Agent runs auto-assessment (5-step LLM pipeline)
+#    Produces model_sqls + clean_rules + field_mappings + scope.json
+result = json.loads(run(
+    "antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto --json"
+))
 
-# 5. Agent reads the prompt, generates assessment.md
-prompt = open("requirements/REQ-20260508-001/assessment/prompt.md").read()
-assessment_md = llm_generate_assessment(prompt)  # agent logic
-with open("requirements/REQ-20260508-001/assessment/assessment.md", "w") as f:
-    f.write(assessment_md)
+# 5. Agent reviews uncovered fields (if any) and decides whether to approve
+if result["approval_recommendation"] == "auto" and not result["uncovered_fields"]:
+    run("antline requirement approve REQ-20260508-001")
+else:
+    # Review low-confidence mappings or uncovered fields
+    for f in result["uncovered_fields"]:
+        print(f"Uncovered: {f}")
+    # Agent can fix individual mappings, or use --force to approve anyway
+    run("antline requirement approve REQ-20260508-001 --force")
 
-# 6. Agent approves the completed assessment (validates against explore reports)
-run("antline requirement approve REQ-20260508-001")
-
-# If validation fails (e.g. table/field mismatch), agent can fix assessment.md
-# and retry, or use --force if the mismatch is intentional
-# run("antline requirement approve REQ-20260508-001 --force")
+# Alternative: step-by-step for fine-grained control
+# Step 1: table scope only
+run("antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto --step scope")
+# Agent reviews scope.json, then Step 2-5: generate SQL from scope
+run("antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto --step generate --scope-file scope.json")
 
 # 7. Create project and scaffold
 run("antline project create --name X --requirements REQ-20260508-001")
@@ -534,6 +607,7 @@ ruff check antline/ tests/
 - [x] Approval validation against explore reports
 - [x] Re-approval for IN_PROJECT requirements with notes
 - [x] Extract job (physical data sync for sync mode)
+- [x] **Intelligent requirement assessment** (`--auto`): LLM-driven 5-step pipeline (scope → SQL → audit → gap-fill → merge), produces model-level SQL + clean rules directly
 - [ ] Schedule command (cron wrapper / Airflow DAG generation)
 - [ ] Plugin system for custom ETL backends
 - [ ] Web UI (lightweight)

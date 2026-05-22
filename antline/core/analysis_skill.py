@@ -7,7 +7,9 @@ Produces model-level SQL (map layer) plus clean rules, with a
 from __future__ import annotations
 
 import json
-from typing import Any, Callable
+from collections.abc import Callable
+from contextlib import suppress
+from typing import Any
 
 import sqlparse
 from pydantic import BaseModel, Field
@@ -15,7 +17,6 @@ from pydantic import BaseModel, Field
 from antline.core.models import (
     AssessmentRisk,
     CleanRule,
-    ColumnMeta,
     FieldMapping,
     Requirement,
     SourceExploreReport,
@@ -59,8 +60,10 @@ class DataRequirementAnalysisSkill:
     def __init__(
         self,
         llm_call: Callable[[str], str] | None = None,
+        progress_callback: Callable[[str, str, Any], None] | None = None,
     ) -> None:
         self.llm_call = llm_call or self._default_llm_call
+        self.progress_callback = progress_callback or (lambda _step, _msg, _data=None: None)
 
     # ------------------------------------------------------------------
     # Step 0–5 orchestration
@@ -77,6 +80,11 @@ class DataRequirementAnalysisSkill:
         # --- Step 0: source summaries ----------------------------------
         source_summaries = [_summarize_report(r) for r in reports]
         all_source_text = "\n\n".join(source_summaries)
+        self.progress_callback(
+            "step0",
+            f"Source summaries: {len(reports)} reports, {len(all_source_text)} chars",
+            {"reports": len(reports), "chars": len(all_source_text)},
+        )
 
         # --- Step 1: table scope analysis ------------------------------
         scope = self._step1_table_scope(
@@ -85,11 +93,21 @@ class DataRequirementAnalysisSkill:
         )
         result.source_scope = scope
         result.confidence = _avg_scope_confidence(scope)
+        self.progress_callback(
+            "step1",
+            f"Table scope analysis: {len(scope)} target tables identified",
+            {"scope": scope},
+        )
 
         for target_schema in requirement.target_schemas:
             target_table = target_schema.table
             table_scope = scope.get(target_table, {})
             if not table_scope:
+                self.progress_callback(
+                    "step1",
+                    f"  [SKIP] No scope for {target_table}",
+                    {"target_table": target_table},
+                )
                 result.risks.append(
                     AssessmentRisk(
                         level="high",
@@ -99,6 +117,11 @@ class DataRequirementAnalysisSkill:
                 )
                 continue
 
+            self.progress_callback(
+                "step2",
+                f"Generating SQL for {target_table} …",
+                {"target_table": target_table},
+            )
             # --- Step 2: generate model SQL ----------------------------
             step2 = self._step2_generate_sql(
                 target_schema,
@@ -107,13 +130,28 @@ class DataRequirementAnalysisSkill:
             )
             map_sql = step2.get("map_sql", "")
             clean_rules = step2.get("clean_rules", [])
+            self.progress_callback(
+                "step2",
+                f"  SQL generated ({len(map_sql)} chars)",
+                {"target_table": target_table, "sql": map_sql},
+            )
 
             # --- Step 3: coverage audit --------------------------------
             target_fields = [f.name for f in target_schema.fields]
             uncovered = _audit_coverage(map_sql, target_fields)
+            self.progress_callback(
+                "step3",
+                f"  Coverage audit: {len(target_fields) - len(uncovered)}/{len(target_fields)} fields covered",
+                {"target_table": target_table, "uncovered": uncovered},
+            )
 
             # --- Step 4: gap-fill (only if gaps found) -----------------
             if uncovered:
+                self.progress_callback(
+                    "step4",
+                    f"  Gap-fill for {len(uncovered)} uncovered fields: {', '.join(uncovered)}",
+                    {"target_table": target_table, "uncovered": uncovered},
+                )
                 gap_fill = self._step4_gap_fill(
                     uncovered,
                     target_table,
@@ -123,6 +161,11 @@ class DataRequirementAnalysisSkill:
                 map_sql = _merge_gaps_into_sql(map_sql, gap_fill)
                 # Re-audit after merge
                 uncovered = _audit_coverage(map_sql, target_fields)
+                self.progress_callback(
+                    "step5",
+                    f"  Merged gaps, re-audit: {len(uncovered)} still uncovered",
+                    {"target_table": target_table, "sql": map_sql, "uncovered": uncovered},
+                )
 
             result.model_sqls[target_table] = map_sql
             result.uncovered_fields.extend(
@@ -131,10 +174,8 @@ class DataRequirementAnalysisSkill:
 
             # Collect clean rules
             for cr_data in clean_rules:
-                try:
+                with suppress(Exception):
                     result.clean_rules.append(CleanRule.model_validate(cr_data))
-                except Exception:
-                    pass  # ignore malformed clean rules
 
             # Derive field_mappings from SQL for audit trail
             result.field_mappings.extend(
@@ -187,7 +228,11 @@ class DataRequirementAnalysisSkill:
             '  }\n'
             "}\n"
         )
+        self.progress_callback(
+            "step1", "  Prompting LLM for table scope analysis …", {"prompt_preview": prompt[:500]}
+        )
         raw = self.llm_call(prompt)
+        self.progress_callback("step1", "  LLM raw response:", {"raw": raw})
         return _safe_json_parse(raw, default={})
 
     def _step2_generate_sql(
@@ -224,7 +269,9 @@ class DataRequirementAnalysisSkill:
             "=== FULL SOURCE CATALOG ===\n"
             f"{source_text}\n\n"
             "Requirements:\n"
-            "1. Use dbt source() syntax: {{ source('SRC-XXX', 'table_name') }}\n"
+            "1. Use dbt source() syntax: {{ source('<SOURCE_ID>', 'table_name') }}.\n"
+            "   Use the EXACT source IDs shown in the source catalog above\n"
+            "   (e.g. SRC-20260508-001). Do NOT use made-up IDs like SRC-HIS.\n"
             "2. Use table aliases (e.g. p for patient_info)\n"
             "3. Handle type mismatches with CAST()\n"
             "4. Handle NULLs for NOT NULL target fields with COALESCE()\n"
@@ -235,7 +282,13 @@ class DataRequirementAnalysisSkill:
             '     {"target_field": "table.field", "rules": ["uppercase"], "coalesce_default": ""}\n'
             '   ]\n'
         )
+        self.progress_callback(
+            "step2",
+            f"  Prompting LLM for SQL generation ({target_schema.table}) …",
+            {"prompt_preview": prompt[:500]},
+        )
         raw = self.llm_call(prompt)
+        self.progress_callback("step2", "  LLM raw response:", {"raw": raw})
         return _safe_json_parse(raw, default={"map_sql": "", "clean_rules": []})
 
     def _step4_gap_fill(
@@ -258,7 +311,13 @@ class DataRequirementAnalysisSkill:
             '"source_field": "src_col", "transform": "CAST(src_col AS DATE)", '
             '"rationale": "why"}'
         )
+        self.progress_callback(
+            "step4",
+            f"  Prompting LLM for gap-fill ({target_table}) …",
+            {"prompt_preview": prompt[:500]},
+        )
         raw = self.llm_call(prompt)
+        self.progress_callback("step4", "  LLM raw response:", {"raw": raw})
         data = _safe_json_parse(raw, default=[])
         return data if isinstance(data, list) else []
 
@@ -278,7 +337,7 @@ class DataRequirementAnalysisSkill:
 
 def _summarize_report(report: SourceExploreReport) -> str:
     """Convert an explore report into a concise LLM-friendly summary."""
-    lines: list[str] = []
+    lines: list[str] = [f"=== Source: {report.source_id} ==="]
     for t in report.tables:
         lines.append(
             f"表: {t.name} "
@@ -432,8 +491,15 @@ def _merge_gaps_into_sql(base_sql: str, gap_fill: list[dict[str, Any]]) -> str:
 
 
 def _safe_json_parse(raw: str, default: Any) -> Any:
-    """Try to extract JSON from an LLM response (handles markdown fences)."""
+    """Try to extract JSON from an LLM response (handles markdown fences, <think> blocks)."""
     text = raw.strip()
+
+    # Strip <think>...</think> reasoning blocks (used by DeepSeek / MiniMax-M2.7)
+    if text.startswith("<think>"):
+        end = text.find("</think>")
+        if end != -1:
+            text = text[end + len("</think>"):].strip()
+
     # Strip markdown code fences
     if text.startswith("```json"):
         text = text[7:]
@@ -442,10 +508,33 @@ def _safe_json_parse(raw: str, default: Any) -> Any:
     if text.endswith("```"):
         text = text[:-3]
     text = text.strip()
+
+    # Try direct parse
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        return default
+        pass
+
+    # Fallback: find the outermost JSON object or array
+    start_obj = text.find("{")
+    start_arr = text.find("[")
+    start = min(
+        s for s in (start_obj, start_arr) if s != -1
+    ) if any(s != -1 for s in (start_obj, start_arr)) else -1
+
+    if start != -1:
+        # Find the matching closing bracket
+        if start == start_arr:
+            end = text.rfind("]")
+        else:
+            end = text.rfind("}")
+        if end != -1 and end > start:
+            try:
+                return json.loads(text[start:end + 1])
+            except json.JSONDecodeError:
+                pass
+
+    return default
 
 
 def _avg_scope_confidence(scope: dict[str, Any]) -> float:
@@ -513,45 +602,17 @@ def create_openai_llm_call(
     """Return an *llm_call* backed by the OpenAI Chat Completions API.
 
     Uses only stdlib (``urllib``) so no extra package is required.
+
+    .. deprecated::
+        Use :func:`antline.core.llm_config.create_llm_call` with an
+        :class:`~antline.core.llm_config.LLMConfig` instead.
     """
-    import os
-    import urllib.request
-    from typing import Any
+    from antline.core.llm_config import LLMConfig, create_llm_call
 
-    key = api_key or os.environ.get("OPENAI_API_KEY", "")
-    if not key:
-        raise RuntimeError(
-            "OpenAI API key not configured. Set OPENAI_API_KEY environment variable "
-            "or pass api_key=... to create_openai_llm_call()."
-        )
-
-    def _call(prompt: str) -> str:
-        payload: dict[str, Any] = {
-            "model": model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a senior data engineer. "
-                        "Respond ONLY with the requested JSON. No markdown, no explanations."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.2,
-        }
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            f"{base_url.rstrip('/')}/chat/completions",
-            data=data,
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-            return result["choices"][0]["message"]["content"]
-
-    return _call
+    config = LLMConfig(
+        provider="openai",
+        model=model,
+        api_key=api_key,
+        base_url=base_url,
+    )
+    return create_llm_call(config)

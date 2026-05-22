@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from antline.core.analysis_skill import _audit_coverage, _extract_select_aliases
 
 

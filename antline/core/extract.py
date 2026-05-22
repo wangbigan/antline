@@ -52,6 +52,8 @@ def _get_source_engine(source: DataSource, password: str) -> Engine:
     conn_str = source.connection_string(password)
     if "sqlite" not in conn_str:
         kwargs["connect_args"] = {"connect_timeout": 10}
+        if source.db_type.value == "postgresql":
+            kwargs["connect_args"]["gssencmode"] = "disable"
     return create_engine(conn_str, **kwargs)
 
 

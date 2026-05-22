@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from antline.core.analysis_skill import (
     AnalysisResult,
     DataRequirementAnalysisSkill,
@@ -22,7 +20,6 @@ from antline.core.models import (
     TargetField,
     TargetSchema,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -129,7 +126,7 @@ class TestSummarizeReport:
     def test_includes_null_rate(self) -> None:
         report = _make_report()
         text = _summarize_report(report)
-        assert "null率5%" in text or "null_rate" in text
+        assert "null率" in text and "5" in text
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +144,18 @@ class TestSafeJsonParse:
 
     def test_invalid_fallback(self) -> None:
         assert _safe_json_parse("not json", {"default": True}) == {"default": True}
+
+    def test_think_block(self) -> None:
+        raw = "<think>Let me think...</think>\n{\"a\": 1}"
+        assert _safe_json_parse(raw, {}) == {"a": 1}
+
+    def test_think_block_with_markdown(self) -> None:
+        raw = "<think>Let me think...</think>\n```json\n{\"a\": 1}\n```"
+        assert _safe_json_parse(raw, {}) == {"a": 1}
+
+    def test_json_embedded_in_text(self) -> None:
+        raw = "Here is the result:\n{\"a\": 1}\nHope that helps!"
+        assert _safe_json_parse(raw, {}) == {"a": 1}
 
 
 # ---------------------------------------------------------------------------

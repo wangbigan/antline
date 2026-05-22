@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -14,9 +15,11 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from antline.core.analysis_skill import AnalysisResult
 from antline.core.config import ProjectState
 from antline.core.csv_schema import import_schema_from_csv, save_schemas_as_yaml
 from antline.core.git import git_add_all, git_commit
+from antline.core.llm_config import LLMConfig, create_llm_call, load_llm_config
 from antline.core.models import (
     AssessmentRisk,
     CleanRule,
@@ -224,22 +227,59 @@ def assess(
             from antline.core.analysis_skill import (
                 AnalysisResult,
                 DataRequirementAnalysisSkill,
-                create_openai_llm_call,
             )
 
-            llm_call = create_openai_llm_call()
+            llm_config = load_llm_config(state.root / "antline.yml")
+            if llm_config is None:
+                llm_config = LLMConfig()  # defaults: openai / gpt-4o
+            llm_call = create_llm_call(llm_config)
+            console.print(
+                f"  [dim]LLM: {llm_config.provider} / {llm_config.model}[/]"
+            )
         except RuntimeError as exc:
             console.print(f"[red]LLM 未配置:[/] {exc}")
             console.print(
-                "[yellow]提示:[/] 设置 OPENAI_API_KEY 环境变量，"
-                "或使用默认模式生成 prompt.md 后手动调用大模型。"
+                "[yellow]提示:[/] 在 antline.yml 中配置 llm 节，"
+                "或设置 OPENAI_API_KEY / ANTHROPIC_API_KEY 环境变量。"
             )
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         except Exception as exc:
             console.print(f"[red]初始化 LLM 失败:[/] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from exc
 
-        skill = DataRequirementAnalysisSkill(llm_call=llm_call)
+        def _progress(step: str, msg: str, data: Any = None) -> None:
+            if step == "step1" and "raw" in (data or {}):
+                raw = data["raw"]
+                console.print(f"  [dim]{msg}[/]")
+                if raw and len(raw) > 0:
+                    preview = raw[:400] + ("…" if len(raw) > 400 else "")
+                    console.print(f"    [dim]{preview}[/]")
+                else:
+                    console.print("    [red](empty response)[/]")
+            elif step in ("step2", "step4") and "raw" in (data or {}):
+                raw = data["raw"]
+                console.print(f"  [dim]{msg}[/]")
+                if raw and len(raw) > 0:
+                    preview = raw[:400] + ("…" if len(raw) > 400 else "")
+                    console.print(f"    [dim]{preview}[/]")
+                else:
+                    console.print("    [red](empty response)[/]")
+            elif step == "step3":
+                uncovered = (data or {}).get("uncovered", [])
+                if uncovered:
+                    console.print(f"  [yellow]{msg}[/]")
+                else:
+                    console.print(f"  [dim]{msg}[/]")
+            elif step == "step5":
+                uncovered = (data or {}).get("uncovered", [])
+                if uncovered:
+                    console.print(f"  [yellow]{msg}[/]")
+                else:
+                    console.print(f"  [dim]{msg}[/]")
+            else:
+                console.print(f"  [dim]{msg}[/]")
+
+        skill = DataRequirementAnalysisSkill(llm_call=llm_call, progress_callback=_progress)
 
         # Partial step execution
         if step == "scope":
@@ -298,10 +338,8 @@ def assess(
                 result.model_sqls[ts.table] = map_sql
                 result.uncovered_fields.extend(f"{ts.table}.{f}" for f in uncovered)
                 for cr_data in step2.get("clean_rules", []):
-                    try:
+                    with suppress(Exception):
                         result.clean_rules.append(CleanRule.model_validate(cr_data))
-                    except Exception:
-                        pass
 
             _save_auto_assessment(state, req, result, source_ids)
             _print_auto_result(result, json_output, min_confidence)
@@ -379,11 +417,10 @@ def _merge_gaps_into_sql(base_sql: str, gap_fill: list[dict[str, Any]]) -> str:
 def _save_auto_assessment(
     state: ProjectState,
     req: Requirement,
-    result: "AnalysisResult",
+    result: AnalysisResult,
     source_ids: list[str],
 ) -> None:
     """Persist an auto-generated assessment into the requirement."""
-    from antline.core.analysis_skill import AnalysisResult
 
     assessment = RequirementAssessment(
         feasible=True,
@@ -421,12 +458,11 @@ def _save_auto_assessment(
 
 
 def _print_auto_result(
-    result: "AnalysisResult",
+    result: AnalysisResult,
     json_output: bool,
     min_confidence: float,
 ) -> None:
     """Print analysis result to console."""
-    from antline.core.analysis_skill import AnalysisResult
 
     if json_output:
         console.print(
@@ -517,64 +553,78 @@ def approve(
     if assessment_file is None:
         assessment_file = state.root / "requirements" / req_id / "assessment" / "assessment.md"
 
-    if not assessment_file.exists():
-        console.print(
-            f"[red]评估文件未找到:[/] {assessment_file}\n"
-            f"请先运行 `antline requirement assess {req_id} <sources>`，"
-            f"然后让大模型生成评估报告并保存为 {assessment_file.name}。"
-        )
-        raise typer.Exit(1)
+    # ------------------------------------------------------------------
+    # Auto-assessed shortcut: if assessment already in requirement.yml,
+    # skip the file parsing
+    # ------------------------------------------------------------------
+    if not assessment_file.exists() and req.assessment:
+        console.print(f"[dim]使用已有自动评估结果 (engine={req.assessment.engine_version})[/]")
+        assessment = req.assessment
+        # Ensure reapproval_reason is set if needed
+        if note:
+            assessment.reapproval_reason = note
+            assessment.assessed_at = datetime.now(timezone(timedelta(hours=8)))
+    else:
+        if not assessment_file.exists():
+            console.print(
+                f"[red]评估文件未找到:[/] {assessment_file}\n"
+                f"请先运行 `antline requirement assess {req_id} <sources>`，"
+                f"然后让大模型生成评估报告并保存为 {assessment_file.name}。"
+            )
+            raise typer.Exit(1)
 
-    # Parse assessment from Markdown with YAML frontmatter
-    content = assessment_file.read_text()
-    frontmatter_match = re.search(r"^---\n(.*?)\n---", content, re.DOTALL)
-    if not frontmatter_match:
-        console.print(
-            "[red]评估文件格式错误：未找到 YAML frontmatter。[/]\n"
-            "评估文件应以 `---` 开头，包含 YAML 结构化数据，"
-            "然后再次以 `---` 结束，接着是 Markdown 正文。"
-        )
-        raise typer.Exit(1)
-
-    try:
-        data = yaml.safe_load(frontmatter_match.group(1))
-    except Exception as exc:
-        console.print(f"[red]解析 frontmatter 失败:[/] {exc}")
-        raise typer.Exit(1)
-
-    if not data:
-        console.print("[red]评估文件 frontmatter 为空。[/]")
-        raise typer.Exit(1)
-
-    # Validate required fields
-    if "field_mappings" not in data or not data["field_mappings"]:
-        console.print("[red]评估缺少字段映射。请先完成模板填写。[/]")
-        raise typer.Exit(1)
-
-    # Build RequirementAssessment
-    try:
-        mappings = [FieldMapping.model_validate(m) for m in data.get("field_mappings", [])]
-        risks = [AssessmentRisk.model_validate(r) for r in data.get("risks", [])]
-        feasible = bool(data.get("feasible", False))
+        # Parse assessment from Markdown with YAML frontmatter
+        content = assessment_file.read_text()
+        frontmatter_match = re.search(r"^---\n(.*?)\n---", content, re.DOTALL)
+        if not frontmatter_match:
+            console.print(
+                "[red]评估文件格式错误：未找到 YAML frontmatter。[/]\n"
+                "评估文件应以 `---` 开头，包含 YAML 结构化数据，"
+                "然后再次以 `---` 结束，接着是 Markdown 正文。"
+            )
+            raise typer.Exit(1)
 
         try:
-            rel_path = str(assessment_file.resolve().relative_to(state.root.resolve()))
-        except ValueError:
-            rel_path = str(assessment_file)
+            data = yaml.safe_load(frontmatter_match.group(1))
+        except Exception as exc:
+            console.print(f"[red]解析 frontmatter 失败:[/] {exc}")
+            raise typer.Exit(1) from exc
 
-        assessment = RequirementAssessment(
-            feasible=feasible,
-            report_path=rel_path,
-            source_ids=data.get("source_ids", []),
-            field_mappings=mappings,
-            risks=risks,
-            notes=data.get("notes", ""),
-            reapproval_reason=note,
-            assessed_at=datetime.now(timezone(timedelta(hours=8))),
-        )
-    except Exception as exc:
-        console.print(f"[red]评估数据无效:[/] {exc}")
-        raise typer.Exit(1)
+        if not data:
+            console.print("[red]评估文件 frontmatter 为空。[/]")
+            raise typer.Exit(1)
+
+        # Validate required fields
+        if "field_mappings" not in data or not data["field_mappings"]:
+            console.print("[red]评估缺少字段映射。请先完成模板填写。[/]")
+            raise typer.Exit(1)
+
+        # Build RequirementAssessment
+        try:
+            mappings = [FieldMapping.model_validate(m) for m in data.get("field_mappings", [])]
+            risks = [AssessmentRisk.model_validate(r) for r in data.get("risks", [])]
+            clean_rules = [CleanRule.model_validate(cr) for cr in data.get("clean_rules", [])]
+            feasible = bool(data.get("feasible", False))
+
+            try:
+                rel_path = str(assessment_file.resolve().relative_to(state.root.resolve()))
+            except ValueError:
+                rel_path = str(assessment_file)
+
+            assessment = RequirementAssessment(
+                feasible=feasible,
+                report_path=rel_path,
+                source_ids=data.get("source_ids", []),
+                field_mappings=mappings,
+                clean_rules=clean_rules,
+                risks=risks,
+                notes=data.get("notes", ""),
+                reapproval_reason=note,
+                assessed_at=datetime.now(timezone(timedelta(hours=8))),
+            )
+        except Exception as exc:
+            console.print(f"[red]评估数据无效:[/] {exc}")
+            raise typer.Exit(1) from exc
 
     # ------------------------------------------------------------------
     # Validate table/field references against explore reports
@@ -583,20 +633,20 @@ def approve(
 
     # Load all explore reports referenced by source_ids
     explore_reports: dict[str, SourceExploreReport] = {}
-    for sid in data.get("source_ids", []):
+    for sid in assessment.source_ids:
         report_path = state.root / "sources" / sid / "explore" / "report.yml"
         if report_path.exists():
             report_data = yaml.safe_load(report_path.read_text())
             if report_data:
                 explore_reports[sid] = SourceExploreReport.model_validate(report_data)
 
-    for idx, m in enumerate(data.get("field_mappings", []), start=1):
-        if m.get("mapping_type") == "missing":
+    for idx, m in enumerate(assessment.field_mappings, start=1):
+        if m.mapping_type == "missing":
             continue
 
-        source_table = m.get("source_table") or ""
-        source_field = m.get("source_field") or ""
-        target_field = m.get("target_field", "")
+        source_table = m.source_table or ""
+        source_field = m.source_field or ""
+        target_field = m.target_field
 
         if not source_table or not source_field:
             continue
@@ -639,7 +689,7 @@ def approve(
             raise typer.Exit(1)
         console.print("[yellow]Proceeding with --force (validation errors ignored).[/]")
 
-    if not feasible and not force:
+    if not assessment.feasible and not force:
         console.print("[red]评估标记为不可行。使用 --force 强制通过，或先修复问题。[/]")
         raise typer.Exit(1)
 
@@ -651,9 +701,9 @@ def approve(
     git_add_all(state.root)
     git_commit(f"feat(requirement): approve {req_id}", state.root)
     console.print(f"[green]审批通过:[/] {req_id} — 可以创建项目")
-    console.print(f"  字段映射: {len(mappings)} 个")
-    if risks:
-        console.print(f"  风险项: {len(risks)} 个")
+    console.print(f"  字段映射: {len(assessment.field_mappings)} 个")
+    if assessment.risks:
+        console.print(f"  风险项: {len(assessment.risks)} 个")
 
 
 @app.command()
@@ -797,7 +847,7 @@ def add_schema(
     if req.assessment:
         req.assessment = None
         req.status = RequirementStatus.DRAFT
-        console.print(f"[yellow]Assessment reset:[/] schemas changed")
+        console.print("[yellow]Assessment reset:[/] schemas changed")
 
     state.save_requirement(req)
     git_add_all(state.root)

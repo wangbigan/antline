@@ -116,7 +116,10 @@ def init(
 
         if conn_str:
             try:
-                engine = create_engine(conn_str, connect_args={"connect_timeout": 3})
+                kwargs = {"connect_args": {"connect_timeout": 3}}
+                if db_type.value == "postgresql":
+                    kwargs["connect_args"]["gssencmode"] = "disable"
+                engine = create_engine(conn_str, **kwargs)
                 with engine.connect() as conn:
                     conn.execute(text("SELECT 1"))
                 console.print("[green]ok[/]")
