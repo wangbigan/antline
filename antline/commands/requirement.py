@@ -30,6 +30,7 @@ from antline.core.models import (
     SourceExploreReport,
     TargetSchema,
 )
+from antline.core.sql_validator import validate_all_model_sqls
 
 app = typer.Typer(no_args_is_help=True)
 console = Console()
@@ -171,6 +172,12 @@ def assess(
     min_confidence: float = typer.Option(
         0.0, "--min-confidence", help="仅显示置信度高于此值的映射"
     ),
+    validate_sql_flag: bool = typer.Option(
+        False, "--validate", help="对生成的 SQL 在本地目标数据库执行校验 (需已运行 source setup)"
+    ),
+    target_password: str = typer.Option(
+        "", "--target-password", help="本地目标数据库密码 (仅 --validate 时使用)"
+    ),
 ) -> None:
     """Generate assessment materials for a requirement.
 
@@ -248,7 +255,7 @@ def assess(
             raise typer.Exit(1) from exc
 
         def _progress(step: str, msg: str, data: Any = None) -> None:
-            if step == "step1" and "raw" in (data or {}):
+            if step == "step1" and "raw" in (data or {}) or step in ("step2", "step4") and "raw" in (data or {}):
                 raw = data["raw"]
                 console.print(f"  [dim]{msg}[/]")
                 if raw and len(raw) > 0:
@@ -256,21 +263,7 @@ def assess(
                     console.print(f"    [dim]{preview}[/]")
                 else:
                     console.print("    [red](空响应)[/]")
-            elif step in ("step2", "step4") and "raw" in (data or {}):
-                raw = data["raw"]
-                console.print(f"  [dim]{msg}[/]")
-                if raw and len(raw) > 0:
-                    preview = raw[:400] + ("…" if len(raw) > 400 else "")
-                    console.print(f"    [dim]{preview}[/]")
-                else:
-                    console.print("    [red](空响应)[/]")
-            elif step == "step3":
-                uncovered = (data or {}).get("uncovered", [])
-                if uncovered:
-                    console.print(f"  [yellow]{msg}[/]")
-                else:
-                    console.print(f"  [dim]{msg}[/]")
-            elif step == "step5":
+            elif step == "step3" or step == "step5":
                 uncovered = (data or {}).get("uncovered", [])
                 if uncovered:
                     console.print(f"  [yellow]{msg}[/]")
@@ -343,12 +336,16 @@ def assess(
 
             _save_auto_assessment(state, req, result, source_ids)
             _print_auto_result(result, json_output, min_confidence)
+            if validate_sql_flag:
+                _run_sql_validation(state, result.model_sqls, target_password)
             return
 
         # Full pipeline (steps 0-5)
         result = skill.analyze(req, reports)
         _save_auto_assessment(state, req, result, source_ids)
         _print_auto_result(result, json_output, min_confidence)
+        if validate_sql_flag:
+            _run_sql_validation(state, result.model_sqls, target_password)
         return
 
     # ------------------------------------------------------------------
@@ -500,6 +497,67 @@ def _print_auto_result(
         console.print(f"  风险: {len(result.risks)} 个")
         for r in result.risks:
             console.print(f"    [{r.level}] {r.description}")
+
+
+def _run_sql_validation(
+    state: ProjectState,
+    model_sqls: dict[str, str],
+    target_password: str,
+) -> None:
+    """Run SQL validation for generated model SQLs against local target DB."""
+    platform = state.workspace_platform()
+    if not platform:
+        console.print("[yellow]跳过 SQL 校验:[/] Workspace platform 未配置")
+        return
+
+    db_type = platform.get("db_type", "postgresql")
+    if db_type != "postgresql":
+        console.print(f"[yellow]跳过 SQL 校验:[/] 仅支持 PostgreSQL 目标, 当前为 {db_type}")
+        return
+
+    host = platform.get("host", "localhost")
+    port = platform.get("port", 5432)
+    database = platform.get("database", "")
+    platform_user = platform.get("user", "")
+
+    if not database:
+        console.print("[yellow]跳过 SQL 校验:[/] 目标数据库名未配置")
+        return
+
+    if not platform_user:
+        platform_user = typer.prompt("Target database user")
+    if not target_password:
+        target_password = typer.prompt("Target database password", hide_input=True)
+
+    console.print(f"\n[bold]SQL 语法校验[/] ({host}:{port}/{database}) …")
+    val_results = validate_all_model_sqls(
+        state=state,
+        model_sqls=model_sqls,
+        target_user=platform_user,
+        target_password=target_password,
+        target_db=database,
+    )
+
+    if "error" in val_results:
+        console.print(f"  [red]校验失败:[/] {val_results['error']}")
+        return
+
+    total = len(val_results)
+    passed = sum(1 for r in val_results.values() if r.get("success"))
+    failed = total - passed
+
+    for model_name, r in val_results.items():
+        if r.get("success"):
+            console.print(f"  [green]✓[/] {model_name}: {r['message']}")
+        else:
+            console.print(f"  [red]✗[/] {model_name}: {r['message']}")
+            if r.get("error"):
+                console.print(f"      {r['error']}")
+
+    summary = f"{passed}/{total} 通过"
+    if failed > 0:
+        summary += f", {failed} 失败"
+    console.print(f"  校验汇总: {summary}")
 
 
 @app.command()

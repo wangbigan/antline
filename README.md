@@ -39,6 +39,9 @@ antline source add --type postgresql --host localhost --port 5432 \
 # 探查数据源
 antline source explore SRC-20260508-001
 
+# 在本地接入源数据（FDW 外联表或物理同步）
+antline source setup SRC-20260508-001 --mode fdw
+
 # 从 CSV 导入目标标准（例如 MIMIC-IV 标准）
 antline schema import /path/to/standard_schema.csv --output-dir target_schema
 
@@ -57,6 +60,9 @@ antline requirement add-schema REQ-20260508-001 standard_schema.csv
 # 模式 A：LLM 自动分析（推荐用于 Agent）
 # 运行 5 步流水线：表范围 → SQL 生成 → 覆盖审计 → 缺口填补 → 合并
 antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto
+
+# 自动分析 + SQL 校验（需在本地接入源数据后使用）
+antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto --validate
 
 # 模式 B：人工审核（生成 prompt.md + guide.md + template.md）
 antline requirement assess REQ-20260508-001 SRC-20260508-001
@@ -191,6 +197,7 @@ ID 在同一日期内顺序递增，跨日期互不干扰。
 | `antline source explore SRC-xxx [--max-tables N] [--no-mask]` | 探查元数据 + 统计信息（生成 `explore/report.yml` + `report.md`） |
 | `antline source show SRC-xxx` | 显示数据源详情 |
 | `antline source update SRC-xxx --host newhost ...` | 更新数据源字段 |
+| `antline source setup SRC-xxx --mode {fdw|sync} [--tables TBL,TBL] [--target-db DB] [--target-user U] [--target-password PWD] [--source-password PWD] [--batch-size N]` | 在本地目标数据库接入源数据。`fdw`: 创建外联表; `sync`: 物理同步到 ODS 层 |
 | `antline source remove SRC-xxx [--force]` | 删除数据源 |
 
 ### 标准管理
@@ -209,7 +216,7 @@ ID 在同一日期内顺序递增，跨日期互不干扰。
 | `antline requirement list [--json]` | 列出所有需求 |
 | `antline requirement show REQ-xxx` | 显示需求详情 |
 | `antline requirement add-schema REQ-xxx PATH [PATH ...]` | 向需求添加目标标准 YAML、目录或 CSV |
-| `antline requirement assess REQ-xxx SRC-xxx [SRC-yyy ...] [--focus TABLES] [--full] [--auto] [--step {scope\|generate}] [--scope-file PATH] [--json] [--min-confidence N]` | 生成评估。默认：prompt.md + guide.md + template.md。`--auto`：LLM 驱动的 5 步分析，产出模型 SQL + 清洗规则 |
+| `antline requirement assess REQ-xxx SRC-xxx [SRC-yyy ...] [--focus TABLES] [--full] [--auto] [--step {scope\|generate}] [--scope-file PATH] [--json] [--min-confidence N] [--validate] [--target-password PWD]` | 生成评估。默认：prompt.md + guide.md + template.md。`--auto`：LLM 驱动的 5 步分析，产出模型 SQL + 清洗规则。`--validate`：SQL 语法+字段校验（需先 source setup） |
 | `antline requirement approve REQ-xxx [--file PATH] [--force] [--note TEXT]` | 审阅 assessment.md 后确认需求。验证 source_table/field 引用是否与探查报告一致。`--force` 跳过验证或为 `IN_PROJECT` 需求重新审批（需 `--note`） |
 | `antline requirement update REQ-xxx ...` | 更新需求（重置评估） |
 | `antline requirement remove REQ-xxx [--force]` | 删除需求 |
@@ -333,6 +340,10 @@ antline requirement add-schema REQ-20260508-001 hospital_standard.csv
 # 运行 5 步流水线：表范围 → SQL 生成 → 覆盖审计 → 缺口填补 → 合并
 # 直接产出模型级 SQL + 清洗规则，无需手动填写模板
 antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto
+
+# 自动分析 + SQL 校验（需先运行 source setup 接入源数据）
+# 校验内容：source 可用性检测 → EXPLAIN 语法校验 → LIMIT 1 字段校验
+antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto --validate
 
 # 分步执行：仅分析表范围（第 1 步），输出 JSON
 antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto --step scope --json
@@ -607,6 +618,8 @@ ruff check antline/ tests/
 - [x] 为 IN_PROJECT 需求提供带备注的重新审批
 - [x] 抽取作业（sync 模式的物理数据同步）
 - [x] **智能需求评估**（`--auto`）：LLM 驱动的 5 步流水线（范围 → SQL → 审计 → 缺口填补 → 合并），直接产出模型级 SQL + 清洗规则
+- [x] **本地源数据接入**（`source setup`）：支持 FDW 外联表和物理同步两种模式，在本地目标数据库中接入远程源数据
+- [x] **SQL 执行校验**（`--validate`）：需求评估时自动校验生成的 SQL 语法和字段，需在本地接入源数据后使用
 - [ ] Schedule 命令（cron 包装 / Airflow DAG 生成）
 - [ ] 自定义 ETL 后端插件系统
 - [ ] Web UI（轻量）
