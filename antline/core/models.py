@@ -168,6 +168,7 @@ class FieldMapping(BaseModel):
     transform_sql: str = ""            # 模型级SQL表达式或字段级转换片段
     confidence: float = 0.0            # 匹配置信度 0.0-1.0
     risk: Literal["low", "medium", "high", "critical"] = "low"
+    rationale: str = ""  # LLM 给出的字段映射理由
     source_meta: dict[str, Any] = Field(default_factory=dict)
 
 

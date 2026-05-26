@@ -7,6 +7,7 @@ Produces model-level SQL (map layer) plus clean rules, with a
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from contextlib import suppress
 from typing import Any
@@ -145,6 +146,18 @@ class DataRequirementAnalysisSkill:
                 {"target_table": target_table, "uncovered": uncovered},
             )
 
+            # --- Step 3.5: semantic audit (LLM-driven) -----------------
+            semantic_risks = self._step3_semantic_audit(
+                map_sql, target_schema, all_source_text, table_scope
+            )
+            if semantic_risks:
+                self.progress_callback(
+                    "step3.5",
+                    f"  Semantic audit: {len(semantic_risks)} risk(s) found",
+                    {"target_table": target_table, "risks": semantic_risks},
+                )
+                result.risks.extend(semantic_risks)
+
             # --- Step 4: gap-fill (only if gaps found) -----------------
             if uncovered:
                 self.progress_callback(
@@ -179,7 +192,7 @@ class DataRequirementAnalysisSkill:
 
             # Derive field_mappings from SQL for audit trail
             result.field_mappings.extend(
-                _derive_field_mappings(map_sql, target_table, table_scope)
+                _derive_field_mappings(map_sql, target_table, table_scope, semantic_risks)
             )
 
         # Final approval recommendation
@@ -275,8 +288,38 @@ class DataRequirementAnalysisSkill:
             "2. Use table aliases (e.g. p for patient_info)\n"
             "3. Handle type mismatches with CAST()\n"
             "4. Handle NULLs for NOT NULL target fields with COALESCE()\n"
-            "5. Add '-- transform: description' comments for complex logic\n"
-            "6. Output ONLY valid JSON with exactly these keys:\n"
+            "5. Add '-- transform: description' comments for complex logic (e.g. CASE, subqueries)\n"
+            "6. When joining tables with a one-to-many relationship, aggregate the "
+            "   many-side table first (using a subquery or CTE with GROUP BY on the join key), "
+            "   then join the aggregated result. NEVER do a direct LEFT JOIN from a "
+            "   one-side table to a many-side table without pre-aggregation, as this "
+            "   produces duplicate rows and breaks primary key uniqueness.\n"
+            "7. 关键——每个字段映射必须在同一行附上中文说明注释，格式如下：\n"
+            "     expr AS alias,  -- 说明: 解释为什么这个源字段可以代表目标字段\n"
+            "   说明必须描述语义关系，不能只是重复字段名。\n"
+            "8. 对于每个目标字段，尽最大努力生成有意义的映射：\n"
+            "   - 如果源字段直接语义匹配，直接使用。\n"
+            "   - 如果没有直接匹配，尝试简单计算或推导\n"
+            "     （例如：从 birthdate 计算 age，从 timestamp 提取 year，从 status 推导 flag）。\n"
+            "   - 只有当确实无法从任何源字段推导出值时，才使用 NULL。\n"
+            "\n"
+            "=== 示例 ===\n"
+            "\n"
+            "正确——dod 映射到死亡相关字段：\n"
+            "  CAST(p.death_date AS DATE) AS dod,  -- 说明: death_date 直接记录了患者的死亡日期\n"
+            "\n"
+            "正确——使用聚合避免重复行：\n"
+            "  COALESCE(diag.diag_count, 0) AS diagnosis_count,  -- 说明: 按就诊次数预聚合诊断计数，避免行膨胀\n"
+            "\n"
+            "错误——dod 绝不能映射到就诊/登记日期（会被拒绝）：\n"
+            "  CAST(p.first_visit_date AS DATE) AS dod,  -- 说明: 用 first_visit_date 作为死亡日期的替代\n"
+            "  # ^^ 错误: first_visit_date 是挂号/就诊日期，不是死亡日期。\n"
+            "\n"
+            "错误——不理解语义就乱映射：\n"
+            "  p.register_time AS deathtime,  -- 说明: register_time 是患者进入系统的时间\n"
+            "  # ^^ 错误: register_time 与死亡无关。\n"
+            "\n"
+            "Output ONLY valid JSON with exactly these keys:\n"
             '   "map_sql": "the complete SELECT...FROM...SQL",\n'
             '   "clean_rules": [\n'
             '     {"target_field": "table.field", "rules": ["uppercase"], "coalesce_default": ""}\n'
@@ -291,6 +334,78 @@ class DataRequirementAnalysisSkill:
         self.progress_callback("step2", "  LLM raw response:", {"raw": raw})
         return _safe_json_parse(raw, default={"map_sql": "", "clean_rules": []})
 
+    def _step3_semantic_audit(
+        self,
+        map_sql: str,
+        target_schema: TargetSchema,
+        source_text: str,
+        table_scope: dict[str, Any],
+    ) -> list[AssessmentRisk]:
+        """Audit generated SQL for semantic correctness using LLM.
+
+        Checks that field mappings make sense, JOINs are correct,
+        and business logic is sound.
+        """
+        fields_desc = "\n".join(
+            f"- {f.name}: {f.data_type} {'NOT NULL' if not f.nullable else 'nullable'}"
+            f"{f' — {f.description}' if f.description else ''}"
+            for f in target_schema.fields
+        )
+
+        primary = table_scope.get("primary_source", {}).get("table", "")
+        joins = table_scope.get("join_sources", [])
+        join_desc = ""
+        if joins:
+            join_desc = "\n".join(
+                f"- JOIN {j.get('table')} ON {j.get('join_key')} ({j.get('type', 'left')} join)"
+                for j in joins
+            )
+
+        prompt = (
+            "你是一位资深数据质量审计师。请审查下方生成的 SQL 的语义正确性——"
+            "不是检查语法，而是业务逻辑是否合理。\n\n"
+            f"=== 目标表: {target_schema.table} ===\n"
+            f"{fields_desc}\n\n"
+            "=== 表范围 ===\n"
+            f"主表: {primary}\n"
+            f"{join_desc}\n\n"
+            "=== 生成的 SQL ===\n"
+            f"{map_sql}\n\n"
+            "=== 源表 ===\n"
+            f"{source_text}\n\n"
+            "审计清单（请严格审查）:\n"
+            "1. 字段语义: 每个源字段是否与目标字段语义匹配?\n"
+            "   错误示例: 将 'registration_date'（挂号日期）映射到 'date_of_death'（死亡日期）。\n"
+            "   错误示例: 将 'first_visit_date'（首次就诊日期）映射到 'dod'（死亡日期）。\n"
+            "   请结合字段名和 SQL 中的 rationale 注释进行判断。\n"
+            "2. JOIN 正确性: 是否存在一对多关系但没有聚合，导致行数膨胀?\n"
+            "3. 业务逻辑: 是否存在明显不合理的计算（如日期减法逻辑错误、使用了错误的状态字段）?\n"
+            "4. NULL 处理: NOT NULL 的目标字段是否已做 COALESCE 保护?\n\n"
+            "每发现一个 issue，输出一个 JSON 对象，必须包含以下键:\n"
+            '  {"level": "critical|high|medium|low", '
+            '   "description": "详细的中文说明", '
+            '   "target_field": "table.field"}\n'
+            "\n"
+            "只返回 JSON 数组，无问题时返回: []\n"
+        )
+        self.progress_callback(
+            "step3.5",
+            f"  Prompting LLM for semantic audit ({target_schema.table}) …",
+            {"prompt_preview": prompt[:500]},
+        )
+        raw = self.llm_call(prompt)
+        self.progress_callback("step3.5", "  LLM raw response:", {"raw": raw})
+
+        data = _safe_json_parse(raw, default=[])
+        if not isinstance(data, list):
+            return []
+
+        risks: list[AssessmentRisk] = []
+        for item in data:
+            with suppress(Exception):
+                risks.append(AssessmentRisk.model_validate(item))
+        return risks
+
     def _step4_gap_fill(
         self,
         uncovered: list[str],
@@ -302,14 +417,20 @@ class DataRequirementAnalysisSkill:
         prompt = (
             f"The following target fields in table '{target_table}' were not mapped "
             "in the initial SQL generation. Search ALL source tables below to find "
-            "appropriate source fields.\n\n"
-            f"Unmapped fields: {fields_str}\n\n"
-            "=== ALL SOURCE TABLES ===\n"
+            "或推导合适的映射。\n\n"
+            f"未映射字段: {fields_str}\n\n"
+            "=== 所有源表 ===\n"
             f"{source_text}\n\n"
-            "Respond with JSON array. Each item:\n"
+            "对每个未映射字段:\n"
+            "1. 首先尝试在任何源表中找到直接语义匹配。\n"
+            "2. 如果没有直接匹配，尝试用简单计算推导值\n"
+            "   （例如：从 birthdate 计算 age，从 timestamp 提取 year，从 status 推导 flag）。\n"
+            "3. 只有当确实无法推导时才返回 NULL。\n\n"
+            "以 JSON 数组返回，每项格式:\n"
             '{"target_field": "field_name", "source_table": "src_table", '
-            '"source_field": "src_col", "transform": "CAST(src_col AS DATE)", '
-            '"rationale": "why"}'
+            '"source_field": "src_col 或计算表达式", '
+            '"transform": "COALESCE(src_col, 0) 或 CAST/EXTRACT 表达式", '
+            '"rationale": "语义匹配或推导逻辑的中文说明"}'
         )
         self.progress_callback(
             "step4",
@@ -423,6 +544,50 @@ def _aliases_from_token(token: Any) -> set[str]:
         for sub in token.tokens:
             aliases.update(_aliases_from_token(sub))
     return aliases
+
+
+# ---------------------------------------------------------------------------
+# Step 3.5 helpers: extract rationale comments from SQL
+# ---------------------------------------------------------------------------
+
+
+def _extract_field_rationales(sql: str) -> dict[str, str]:
+    """Extract alias -> rationale mapping from inline rationale comments.
+
+    Expected format:  expr AS alias,  -- rationale: reason
+    Also handles multi-line: AS alias on one line, -- rationale: on next line.
+    """
+    rationales: dict[str, str] = {}
+    if not sql.strip():
+        return rationales
+
+    # Pattern 1: inline on same line (supports both Chinese and English prompts)
+    inline = re.compile(
+        r"AS\s+(\w+)[,\s]*--\s*(?:rationale|说明):\s*(.+)$",
+        re.IGNORECASE | re.MULTILINE,
+    )
+    for match in inline.finditer(sql):
+        alias = match.group(1).strip()
+        rationale = match.group(2).strip()
+        rationales[alias] = rationale
+
+    # Pattern 2: AS alias on one line, -- 说明: on next line
+    lines = sql.splitlines()
+    for i, line in enumerate(lines):
+        m = re.search(r"AS\s+(\w+)\s*[,;]?\s*$", line, re.IGNORECASE)
+        if m and i + 1 < len(lines):
+            alias = m.group(1)
+            if alias in rationales:
+                continue  # Already captured by inline pattern
+            next_line = lines[i + 1].strip()
+            if next_line.startswith("--"):
+                r_m = re.search(
+                    r"--\s*(?:(?:rationale|说明):\s*)?(.+)", next_line, re.IGNORECASE
+                )
+                if r_m:
+                    rationales[alias] = r_m.group(1).strip()
+
+    return rationales
 
 
 # ---------------------------------------------------------------------------
@@ -551,7 +716,10 @@ def _avg_scope_confidence(scope: dict[str, Any]) -> float:
 
 
 def _derive_field_mappings(
-    sql: str, target_table: str, table_scope: dict[str, Any]
+    sql: str,
+    target_table: str,
+    table_scope: dict[str, Any],
+    semantic_risks: list[AssessmentRisk] | None = None,
 ) -> list[FieldMapping]:
     """Best-effort derivation of FieldMapping list from generated SQL.
 
@@ -560,29 +728,59 @@ def _derive_field_mappings(
     mappings: list[FieldMapping] = []
     primary = table_scope.get("primary_source", {}).get("table", "")
 
-    # Simple regex-based extraction of "expr AS alias"
-    import re
+    # Build alias -> risk level lookup from pre-computed semantic audit
+    risk_by_alias: dict[str, str] = {}
+    if semantic_risks is None:
+        semantic_risks = []
+    for risk in semantic_risks:
+        if risk.target_field:
+            alias = risk.target_field.split(".")[-1]
+            risk_by_alias[alias] = risk.level
 
+    # Extract rationales from SQL comments
+    rationales = _extract_field_rationales(sql)
+
+    # Simple regex-based extraction of "expr AS alias"
     pattern = re.compile(r"([\w\.\(\),\s_'%+\-]+?)\s+AS\s+(\w+)", re.IGNORECASE)
     for match in pattern.finditer(sql):
         expr = match.group(1).strip()
         alias = match.group(2).strip()
 
+        # Remove inline comments from expression
+        expr = re.sub(r"\s*--.*$", "", expr, flags=re.MULTILINE).strip()
+
         # Heuristic: if expr is a simple column name, it's direct
-        if re.match(r"^[\w_]+$", expr):
+        # If expr is NULL (with or without type cast), mark as missing
+        if re.match(r"^NULL(?:::[\w\(\),\s]+)?$", expr, re.IGNORECASE):
+            mapping_type = "missing"
+            source_field = None
+            source_table = None
+            transform_logic = ""
+        elif re.match(r"^[\w_]+$", expr):
             mapping_type = "direct"
+            source_field = expr
+            source_table = primary or None
+            transform_logic = ""
         elif "CAST(" in expr.upper() or "COALESCE(" in expr.upper():
             mapping_type = "transform"
+            source_field = None
+            source_table = primary or None
+            transform_logic = expr
         else:
             mapping_type = "transform"
+            source_field = None
+            source_table = primary or None
+            transform_logic = expr
 
         mappings.append(
             FieldMapping(
                 target_field=f"{target_table}.{alias}",
-                source_field=expr if mapping_type == "direct" else None,
-                source_table=primary or None,
+                source_field=source_field,
+                source_table=source_table,
                 mapping_type=mapping_type,  # type: ignore[arg-type]
-                transform_logic=expr if mapping_type == "transform" else "",
+                transform_logic=transform_logic,
+                rationale=rationales.get(alias, ""),
+                risk=risk_by_alias.get(alias, "low"),  # type: ignore[arg-type]
             )
         )
 

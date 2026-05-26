@@ -255,7 +255,7 @@ def assess(
                     preview = raw[:400] + ("…" if len(raw) > 400 else "")
                     console.print(f"    [dim]{preview}[/]")
                 else:
-                    console.print("    [red](empty response)[/]")
+                    console.print("    [red](空响应)[/]")
             elif step in ("step2", "step4") and "raw" in (data or {}):
                 raw = data["raw"]
                 console.print(f"  [dim]{msg}[/]")
@@ -263,7 +263,7 @@ def assess(
                     preview = raw[:400] + ("…" if len(raw) > 400 else "")
                     console.print(f"    [dim]{preview}[/]")
                 else:
-                    console.print("    [red](empty response)[/]")
+                    console.print("    [red](空响应)[/]")
             elif step == "step3":
                 uncovered = (data or {}).get("uncovered", [])
                 if uncovered:
@@ -305,7 +305,7 @@ def assess(
             scope_path.write_text(
                 json.dumps(scope, ensure_ascii=False, indent=2), encoding="utf-8"
             )
-            console.print(f"  Scope saved: {scope_path}")
+            console.print(f"  范围分析已保存: {scope_path}")
             return
 
         if step == "generate":
@@ -429,7 +429,7 @@ def _save_auto_assessment(
         field_mappings=result.field_mappings,
         clean_rules=result.clean_rules,
         risks=result.risks,
-        notes="Auto-assessed by DataRequirementAnalysisSkill",
+        notes="由 DataRequirementAnalysisSkill 自动评估",
         assessed_at=datetime.now(timezone(timedelta(hours=8))),
         engine_version="2.0-llm",
         auto_assessed=True,
@@ -486,9 +486,11 @@ def _print_auto_result(
         )
         return
 
+    _rec_map = {"auto": "自动通过", "suggest": "建议人工审核", "manual": "必须人工审核"}
+    rec_cn = _rec_map.get(result.approval_recommendation, result.approval_recommendation)
     console.print("[green]自动分析完成[/]")
     console.print(f"  置信度: {result.confidence:.2f}")
-    console.print(f"  建议: {result.approval_recommendation}")
+    console.print(f"  建议: {rec_cn}")
     console.print(f"  模型SQL: {len(result.model_sqls)} 个")
     if result.uncovered_fields:
         console.print(f"  [yellow]未覆盖字段: {len(result.uncovered_fields)} 个[/]")

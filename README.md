@@ -1,276 +1,275 @@
 # Antline
 
-> CLI data production management tool — from source exploration to delivery.
+> CLI 数据生产管理工具 —— 从数据源探查到交付。
 
-Antline brings project management discipline to data engineering.
-It provides a structured CLI workflow for data teams (and agents) to:
+Antline 为数据工程引入项目管理规范，为数据团队（及 Agent）提供结构化的 CLI 工作流：
 
-1. **Explore** data sources — metadata, statistics, sample data
-2. **Define** data requirements — target schema from CSV or YAML
-3. **Assess** feasibility — LLM-driven intelligent analysis with "generate → audit → patch" feedback loop, producing model-level SQL directly
-4. **Build** data pipelines — dbt-native scaffolding (row / map / clean)
-5. **Validate** data quality — dbt tests + custom checks
-6. **Deliver** production data — versioned, auditable, reproducible
+1. **探查** 数据源 —— 元数据、统计信息、样本数据
+2. **定义** 数据需求 —— 从 CSV 或 YAML 导入目标标准
+3. **评估** 可行性 —— LLM 驱动的智能分析，采用"生成 → 审计 → 修补"反馈循环，直接产出模型级 SQL
+4. **构建** 数据管道 —— dbt 原生脚手架（row / map / clean 三层）
+5. **验证** 数据质量 —— dbt 测试 + 自定义检查
+6. **交付** 生产数据 —— 版本化、可审计、可复现
 
-## Why Antline?
+## 为什么选择 Antline？
 
-- **Agent-first**: Structured CLI output designed for LLM/Agent consumption (`--json` on every command)
-- **Human-friendly**: Interactive prompts and rich reports for manual workflows
-- **Git-native**: All state stored as YAML files — version control your data projects
-- **Workspace-centric**: One workspace = one data platform, all projects share the same target database
-- **Security-first**: No credentials stored in any config file; all passwords prompted at runtime with audit logging
-- **Lightweight**: Delegates execution to dbt; Antline manages the workflow layer
-- **Open source**: Apache-2.0, built for independent developers and small teams
+- **Agent 优先**：结构化 CLI 输出专为 LLM/Agent 消费设计（每个命令支持 `--json`）
+- **对人友好**：交互式提示和丰富的报告，支持手动工作流
+- **Git 原生**：所有状态以 YAML 文件存储 —— 用版本控制管理数据项目
+- **工作空间为中心**：一个工作空间 = 一个数据平台，所有项目共享同一个目标数据库
+- **安全优先**：任何配置文件均不存储凭据；所有密码运行时提示，并记录审计日志
+- **轻量**：执行委托给 dbt；Antline 只管理工作流层
+- **开源**：Apache-2.0，面向独立开发者和小团队
 
-## Quick Start
+## 快速开始
 
 ```bash
-# Install
+# 安装
 pip install antline[all]
 
-# Initialize a workspace (target database platform config)
+# 初始化工作空间（目标数据库平台配置）
 mkdir my-data-workspace && cd my-data-workspace
-antline init --name "Hospital Data Team" \
+antline init --name "医院数据团队" \
   --db-type postgresql --host localhost --port 5432
 
-# Add a data source (password prompted at runtime)
+# 添加数据源（密码运行时提示）
 antline source add --type postgresql --host localhost --port 5432 \
   --database mydb --user myuser
 
-# Explore the source
+# 探查数据源
 antline source explore SRC-20260508-001
 
-# Import target schema from CSV (e.g. MIMIC-IV standard)
+# 从 CSV 导入目标标准（例如 MIMIC-IV 标准）
 antline schema import /path/to/standard_schema.csv --output-dir target_schema
 
-# Define a requirement
-antline requirement create --name "Unified patient view" \
-  --background "Hospital needs a unified patient dimension" \
-  --goal "Build a standardized patients table from HIS + EMR"
+# 定义需求
+antline requirement create --name "统一患者视图" \
+  --background "医院需要统一的患者维度表" \
+  --goal "从 HIS + EMR 构建标准化的 patients 表"
 
-# Add target schema to the requirement (YAML file, directory, or CSV)
+# 为目标表添加标准（YAML 文件、目录或 CSV）
 antline requirement add-schema REQ-20260508-001 target_schema/patients.yaml
 antline requirement add-schema REQ-20260508-001 target_schema/hosp/
 antline requirement add-schema REQ-20260508-001 standard_schema.csv
 
-# Assess feasibility (two modes)
+# 评估可行性（两种模式）
 
-# Option A: Auto-analysis with LLM (recommended for agents)
-# Runs a 5-step pipeline: table scope → SQL generation → coverage audit → gap-fill → merge
+# 模式 A：LLM 自动分析（推荐用于 Agent）
+# 运行 5 步流水线：表范围 → SQL 生成 → 覆盖审计 → 缺口填补 → 合并
 antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto
 
-# Option B: Manual review (generates prompt.md + guide.md + template.md)
+# 模式 B：人工审核（生成 prompt.md + guide.md + template.md）
 antline requirement assess REQ-20260508-001 SRC-20260508-001
-# After reviewing assessment materials and saving as assessment.md:
+# 审阅评估材料并保存为 assessment.md 后：
 antline requirement approve REQ-20260508-001
 
-# Create project and scaffold pipeline
-antline project create --name "Patient 360" --requirement REQ-20260508-001
+# 创建项目并搭建管道
+antline project create --name "患者 360" --requirement REQ-20260508-001
 
-# Scaffold (credentials prompted at runtime, never stored)
+# 搭建（凭据运行时提示，永不存储）
 antline project scaffold PRJ-20260508-001 --user myuser --password '***'
 
-# Compile (validate SQL syntax without executing)
+# 编译（不执行，仅验证 SQL 语法）
 antline project compile PRJ-20260508-001
 antline project compile PRJ-20260508-001 -m map_patients
 
-# Build with dbt (credentials prompted at runtime)
+# 使用 dbt 构建（凭据运行时提示）
 antline project build PRJ-20260508-001
 
-# Validate and deliver (credentials prompted at runtime)
+# 验证并交付（凭据运行时提示）
 antline project validate PRJ-20260508-001
 antline project deliver PRJ-20260508-001
 ```
 
-## Installation
+## 安装
 
 ```bash
-# Basic install (PostgreSQL only)
+# 基础安装（仅 PostgreSQL）
 pip install antline[postgres]
 
-# With MySQL/TiDB support
+# 支持 MySQL/TiDB
 pip install antline[mysql,tidb]
 
-# All database drivers + dev tools
+# 全部数据库驱动 + 开发工具
 pip install antline[all,dev]
 ```
 
-**Requirements:**
+**环境要求：**
 - Python 3.10+
-- Git (for version control)
-- dbt (for SQL execution, install separately: `pip install dbt-core dbt-postgres`)
-- PostgreSQL (for target database, if using FDW mode)
+- Git（用于版本控制）
+- dbt（用于 SQL 执行，单独安装：`pip install dbt-core dbt-postgres`）
+- PostgreSQL（目标数据库，若使用 FDW 模式）
 
-## Architecture
+## 架构
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Source    │────▶│ Requirement │────▶│   Project   │
-│  Management │     │  Management │     │  Management │
+│   数据源    │────▶│    需求     │────▶│    项目     │
+│   管理      │     │   管理      │     │   管理      │
 └─────────────┘     └─────────────┘     └─────────────┘
                                                 │
                                                 ▼
                                         ┌─────────────┐
                                         │  dbt / SQL  │
-                                        │  Execution  │
+                                        │   执行层    │
 └───────────────────────────────────────────────────────┘
-│         Workspace Platform (shared database)          │
+│            工作空间平台（共享数据库）                   │
 └───────────────────────────────────────────────────────┘
 ```
 
-| Layer | Technology | Role |
-|-------|------------|------|
-| CLI | Typer + Rich | User interface (human + agent) |
-| State | Git-native YAML | Zero-database state management |
-| Models | Pydantic | Type-safe data entities |
-| DB | SQLAlchemy | Multi-database metadata reflection |
-| Execution | External dbt | SQL transformation engine |
-| Platform | Workspace-level | Shared target database config |
+| 层级 | 技术 | 职责 |
+|------|------|------|
+| CLI | Typer + Rich | 用户界面（人 + Agent） |
+| 状态 | Git 原生 YAML | 零数据库状态管理 |
+| 模型 | Pydantic | 类型安全的数据实体 |
+| 数据库 | SQLAlchemy | 多数据库元数据反射 |
+| 执行 | 外部 dbt | SQL 转换引擎 |
+| 平台 | 工作空间级 | 共享目标数据库配置 |
 
-## Workspace Structure
+## 工作空间结构
 
 ```
 my-workspace/
-├── antline.yml              # Workspace config + platform
-├── .gitignore               # Excludes passwords, generated reports
+├── antline.yml              # 工作空间配置 + 平台
+├── .gitignore               # 排除密码、生成的报告
 ├── sources/
 │   └── SRC-20260508-001/
-│       ├── source.yml       # Data source configuration
+│       ├── source.yml       # 数据源配置
 │       └── explore/
-│           ├── report.yml   # Structured report (for agents)
-│           └── report.md    # Human-readable report
+│           ├── report.yml   # 结构化报告（面向 Agent）
+│           └── report.md    # 可读报告（面向人）
 ├── requirements/
 │   └── REQ-20260508-001/
-│       ├── requirement.yml  # Requirement definition
-│       ├── target_schema/   # Target data standard YAMLs
+│       ├── requirement.yml  # 需求定义
+│       ├── target_schema/   # 目标数据标准 YAML
 │       └── assessment/
-│           ├── prompt.md    # LLM prompt
-│           ├── guide.md     # Human guide
-│           ├── template.md  # Empty template
-│           └── assessment.md # Completed assessment
+│           ├── prompt.md    # LLM 提示词
+│           ├── guide.md     # 人工指南
+│           ├── template.md  # 空白模板
+│           └── assessment.md # 完成的评估
 ├── projects/
 │   └── PRJ-20260508-001/
-│       ├── project.yml      # Project definition
-│       ├── dbt/             # Per-project dbt directory
+│       ├── project.yml      # 项目定义
+│       ├── dbt/             # 项目级 dbt 目录
 │       │   ├── dbt_project.yml
 │       │   ├── profiles.yml
 │       │   └── models/
-│       │       ├── row/     # Row layer
-│       │       ├── map/     # Map layer
-│       │       ├── clean/   # Clean layer
+│       │       ├── row/     # 行层
+│       │       ├── map/     # 映射层
+│       │       ├── clean/   # 清洗层
 │       │       └── sources.yml
 │       └── qc/
-│           └── report.md    # QC report
-└── reports/                 # Workspace-level reports
+│           └── report.md    # 质检报告
+└── reports/                 # 工作空间级报告
 ```
 
-### ID Format
+### ID 格式
 
-All entities use date-based IDs:
-- `SRC-YYYYMMDD-NNN` — e.g. `SRC-20260508-001`
-- `REQ-YYYYMMDD-NNN` — e.g. `REQ-20260508-001`
-- `PRJ-YYYYMMDD-NNN` — e.g. `PRJ-20260508-001`
+所有实体使用基于日期的 ID：
+- `SRC-YYYYMMDD-NNN` —— 例如 `SRC-20260508-001`
+- `REQ-YYYYMMDD-NNN` —— 例如 `REQ-20260508-001`
+- `PRJ-YYYYMMDD-NNN` —— 例如 `PRJ-20260508-001`
 
-IDs are sequential within the same date. Cross-date IDs do not interfere with each other.
+ID 在同一日期内顺序递增，跨日期互不干扰。
 
-## Command Reference
+## 命令参考
 
-### Global
+### 全局
 
-| Command | Description |
-|---------|-------------|
-| `antline --version` | Show version |
-| `antline init [--path DIR] [--name NAME] --db-type TYPE --host H --port P [--user U] [--password PWD] [--no-test-connection]` | Initialize workspace with platform config (tests connection, credentials not stored) |
-| `antline status` | Show workspace overview (sources, requirements, projects) |
+| 命令 | 说明 |
+|------|------|
+| `antline --version` | 显示版本 |
+| `antline init [--path DIR] [--name NAME] --db-type TYPE --host H --port P [--user U] [--password PWD] [--no-test-connection]` | 初始化工作空间（测试连接，凭据不存储） |
+| `antline status` | 显示工作空间概览（数据源、需求、项目） |
 
-### Source Management
+### 数据源管理
 
-| Command | Description |
-|---------|-------------|
-| `antline source add --type {postgresql\|mysql\|tidb} ...` | Add a data source (validates connection) |
-| `antline source list [--json]` | List all sources |
-| `antline source explore SRC-xxx [--max-tables N] [--no-mask]` | Explore metadata + statistics (generates `explore/report.yml` + `report.md`) |
-| `antline source show SRC-xxx` | Show source details |
-| `antline source update SRC-xxx --host newhost ...` | Update source fields |
-| `antline source remove SRC-xxx [--force]` | Remove a source |
+| 命令 | 说明 |
+|------|------|
+| `antline source add --type {postgresql\|mysql\|tidb} ...` | 添加数据源（验证连接） |
+| `antline source list [--json]` | 列出所有数据源 |
+| `antline source explore SRC-xxx [--max-tables N] [--no-mask]` | 探查元数据 + 统计信息（生成 `explore/report.yml` + `report.md`） |
+| `antline source show SRC-xxx` | 显示数据源详情 |
+| `antline source update SRC-xxx --host newhost ...` | 更新数据源字段 |
+| `antline source remove SRC-xxx [--force]` | 删除数据源 |
 
-### Schema Management
+### 标准管理
 
-| Command | Description |
-|---------|-------------|
-| `antline schema import CSV_FILE [--output-dir DIR]` | Import target schema from CSV |
-| `antline schema list` | List imported schemas |
-| `antline schema show TABLE_NAME` | Show schema definition |
+| 命令 | 说明 |
+|------|------|
+| `antline schema import CSV_FILE [--output-dir DIR]` | 从 CSV 导入目标标准 |
+| `antline schema list` | 列出已导入的标准 |
+| `antline schema show TABLE_NAME` | 显示标准定义 |
 
-### Requirement Management
+### 需求管理
 
-| Command | Description |
-|---------|-------------|
-| `antline requirement create --name NAME [--background TEXT] [--goal TEXT]` | Create a requirement |
-| `antline requirement list [--json]` | List all requirements |
-| `antline requirement show REQ-xxx` | Show requirement details |
-| `antline requirement add-schema REQ-xxx PATH [PATH ...]` | Add target schema YAML(s), directory, or CSV to a requirement |
-| `antline requirement assess REQ-xxx SRC-xxx [SRC-yyy ...] [--focus TABLES] [--full] [--auto] [--step {scope\|generate}] [--scope-file PATH] [--json] [--min-confidence N]` | Generate assessment. Default: prompt.md + guide.md + template.md. `--auto`: LLM-driven 5-step analysis producing model SQL + clean rules |
-| `antline requirement approve REQ-xxx [--file PATH] [--force] [--note TEXT]` | Confirm requirement after reviewing assessment.md. Validates source_table/field references against explore reports. Use `--force` to bypass validation or re-approve an IN_PROJECT requirement (requires `--note`). |
-| `antline requirement update REQ-xxx ...` | Update requirement (resets assessment) |
-| `antline requirement remove REQ-xxx [--force]` | Remove a requirement |
+| 命令 | 说明 |
+|------|------|
+| `antline requirement create --name NAME [--background TEXT] [--goal TEXT]` | 创建需求 |
+| `antline requirement list [--json]` | 列出所有需求 |
+| `antline requirement show REQ-xxx` | 显示需求详情 |
+| `antline requirement add-schema REQ-xxx PATH [PATH ...]` | 向需求添加目标标准 YAML、目录或 CSV |
+| `antline requirement assess REQ-xxx SRC-xxx [SRC-yyy ...] [--focus TABLES] [--full] [--auto] [--step {scope\|generate}] [--scope-file PATH] [--json] [--min-confidence N]` | 生成评估。默认：prompt.md + guide.md + template.md。`--auto`：LLM 驱动的 5 步分析，产出模型 SQL + 清洗规则 |
+| `antline requirement approve REQ-xxx [--file PATH] [--force] [--note TEXT]` | 审阅 assessment.md 后确认需求。验证 source_table/field 引用是否与探查报告一致。`--force` 跳过验证或为 `IN_PROJECT` 需求重新审批（需 `--note`） |
+| `antline requirement update REQ-xxx ...` | 更新需求（重置评估） |
+| `antline requirement remove REQ-xxx [--force]` | 删除需求 |
 
-### Project Management
+### 项目管理
 
-| Command | Description |
-|---------|-------------|
-| `antline project create --name NAME --requirements REQ-xxx` | Create project from approved requirements |
-| `antline project list [--json]` | List all projects |
-| `antline project show PRJ-xxx` | Show project details |
-| `antline project scaffold PRJ-xxx [--source-mode {fdw\|sync}] [--skip-db-setup] [--user U] [--password PWD]` | Generate dbt project scaffolding (credentials prompted if not provided) |
-| `antline project compile PRJ-xxx [-m MODEL] [--user U] [--password PWD]` | Validate SQL syntax without executing |
-| `antline project build PRJ-xxx [--user U] [--password PWD]` | Build with dbt |
-| `antline project validate PRJ-xxx [--user U] [--password PWD]` | Run data quality tests |
-| `antline project deliver PRJ-xxx` | Mark as production-ready |
+| 命令 | 说明 |
+|------|------|
+| `antline project create --name NAME --requirements REQ-xxx` | 从已审批需求创建项目 |
+| `antline project list [--json]` | 列出所有项目 |
+| `antline project show PRJ-xxx` | 显示项目详情 |
+| `antline project scaffold PRJ-xxx [--source-mode {fdw\|sync}] [--skip-db-setup] [--user U] [--password PWD]` | 生成 dbt 项目脚手架（未提供凭据时提示） |
+| `antline project compile PRJ-xxx [-m MODEL] [--user U] [--password PWD]` | 不执行，仅验证 SQL 语法 |
+| `antline project build PRJ-xxx [--user U] [--password PWD]` | 使用 dbt 构建 |
+| `antline project validate PRJ-xxx [--user U] [--password PWD]` | 运行数据质量测试 |
+| `antline project deliver PRJ-xxx` | 标记为生产就绪 |
 
-## Scaffold: Row Layer Source Modes
+## 脚手架：行层数据源模式
 
-When scaffolding a project, row layer models can reference source tables in two ways:
+搭建项目时，行层模型可以通过两种方式引用源表：
 
-### FDW Mode (default)
+### FDW 模式（默认）
 
-Uses PostgreSQL Foreign Data Wrapper to query external databases as foreign tables.
+使用 PostgreSQL Foreign Data Wrapper 将外部数据库作为外部表查询。
 
 ```bash
 antline project scaffold PRJ-20260508-001 --source-mode fdw
 ```
 
-Prerequisites:
-1. Run the auto-generated FDW setup script before `dbt build`:
+前置条件：
+1. 在 `dbt build` 之前运行自动生成的 FDW 设置脚本：
    ```bash
    psql -d antline_workspace -f projects/PRJ-20260508-001/dbt/sql/fdw_setup.sql
    ```
-2. This creates foreign tables in schemas named after the source databases (e.g. `his_db.patients`)
+2. 这将创建以源数据库命名的 schema 中的外部表（例如 `his_db.patients`）
 
-### Sync Mode
+### Sync 模式
 
-Expects data to be physically synced into the target database's ODS layer first.
+期望数据先物理同步到目标数据库的 ODS 层。
 
 ```bash
 antline project scaffold PRJ-20260508-001 --source-mode sync
 ```
 
-Prerequisites:
-1. Run extract job to copy source data into target DB's `ods_src_001` schema
-2. Then `dbt build` queries local ODS tables
+前置条件：
+1. 运行抽取作业将源数据复制到目标数据库的 `ods_src_001` schema
+2. 然后 `dbt build` 查询本地 ODS 表
 
-## Workflow Example: Hospital Data Integration
+## 工作流示例：医院数据集成
 
-### 1. Initialize Workspace
+### 1. 初始化工作空间
 
 ```bash
 antline init --name "医院数据团队" \
   --db-type postgresql --host localhost --port 5432
 ```
 
-### 2. Define Target Standard
+### 2. 定义目标标准
 
-Create a CSV file with your target data standard:
+创建包含目标数据标准的 CSV 文件：
 
 ```csv
 module,table_name,table_comment,field_name,field_type,field_comment,example
@@ -279,35 +278,35 @@ Hosp,patients,患者信息,gender,VARCHAR(1),性别,F; M
 Hosp,patients,患者信息,age,INTEGER,年龄,65
 ```
 
-Import it:
+导入：
 
 ```bash
 antline schema import hospital_standard.csv --output-dir target_schema
 ```
 
-### 3. Explore Source Databases
+### 3. 探查源数据库
 
 ```bash
-# Add HIS system database (connection is validated before saving, password prompted)
+# 添加 HIS 系统数据库（保存前验证连接，密码运行时提示）
 antline source add --type postgresql --host db.hospital.local \
   --database his_db --user wbg
 
-# Explore structure (generates both report.yml for agents and report.md for humans)
-# Password is prompted at runtime and never stored
-# Sample data in sensitive fields is masked by default
+# 探查结构（同时生成面向 Agent 的 report.yml 和面向人的 report.md）
+# 密码运行时提示，永不存储
+# 敏感字段的样本数据默认脱敏
 antline source explore SRC-20260508-001
 
-# Or disable masking when you need raw values
+# 或需要原始值时关闭脱敏
 antline source explore SRC-20260508-001 --no-mask
 ```
 
-Output:
+输出：
 ```
-Database: his_db (postgresql)
-Tables: 47 | Rows: 1,234,567 | Columns: 892
+数据库: his_db (postgresql)
+表: 47 | 行数: 1,234,567 | 列数: 892
 
 ┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┓
-┃ Table              ┃ Schema ┃ Rows     ┃ Columns ┃ PK      ┃
+┃ 表名               ┃ 模式   ┃ 行数     ┃ 列数    ┃ 主键    ┃
 ┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━┩
 │ patient_visits     │ public │ 500,000  │ 12      │ visit_id│
 │ patient_info       │ public │ 120,000  │ 8       │ id      │
@@ -315,134 +314,134 @@ Tables: 47 | Rows: 1,234,567 | Columns: 892
 └────────────────────┴────────┴──────────┴─────────┴─────────┘
 ```
 
-### 4. Create, Assess, and Approve Requirements
+### 4. 创建、评估并审批需求
 
 ```bash
-# 1. Create the requirement (background + goal)
+# 1. 创建需求（背景 + 目标）
 antline requirement create --name "统一患者视图" \
   --background "医院 HIS 和 EMR 系统患者数据分散，需要统一视图" \
   --goal "建立 MIMIC-IV 标准的 patients + admissions 维度表"
 
-# 2. Add target schema(s) to the requirement (YAML, directory, or CSV)
+# 2. 向需求添加目标标准（YAML、目录或 CSV）
 antline requirement add-schema REQ-20260508-001 target_schema/patients.yaml
 antline requirement add-schema REQ-20260508-001 target_schema/hosp/
 antline requirement add-schema REQ-20260508-001 hospital_standard.csv
 
-# 3. Assess feasibility — two modes available:
+# 3. 评估可行性 —— 两种模式可选：
 
-# Mode A: Auto-analysis with LLM (recommended for agents)
-# Runs 5-step pipeline: table scope → SQL generation → coverage audit → gap-fill → merge
-# Produces model-level SQL + clean rules directly, no manual template filling needed
+# 模式 A：LLM 自动分析（推荐用于 Agent）
+# 运行 5 步流水线：表范围 → SQL 生成 → 覆盖审计 → 缺口填补 → 合并
+# 直接产出模型级 SQL + 清洗规则，无需手动填写模板
 antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto
 
-# Step-by-step: only analyze table scope (Step 1), output JSON
+# 分步执行：仅分析表范围（第 1 步），输出 JSON
 antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto --step scope --json
 
-# Step-by-step: generate SQL from an existing scope file (Steps 2-5)
+# 分步执行：从已有的范围文件生成 SQL（第 2-5 步）
 antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto --step generate --scope-file scope.json
 
-# Mode B: Manual review (generates prompt.md + guide.md + template.md)
+# 模式 B：人工审核（生成 prompt.md + guide.md + template.md）
 antline requirement assess REQ-20260508-001 SRC-20260508-001
 
-# Focus on specific tables only
+# 仅关注特定表
 antline requirement assess REQ-20260508-001 SRC-20260508-001 --focus patient_info,admission_records
 
-# Include full field statistics (null rates, unique counts, top values)
+# 包含完整字段统计（空值率、唯一值数、Top 值）
 antline requirement assess REQ-20260508-001 SRC-20260508-001 --full
 
-# 4. Approve
-# For auto-assessment: approve directly (assessment already in requirement.yml)
+# 4. 审批
+# 自动评估：直接审批（评估结果已在 requirement.yml 中）
 antline requirement approve REQ-20260508-001
 
-# For manual assessment: review materials, save as assessment.md, then approve
-# Approval validates source_table/source_field against explore reports
+# 人工评估：审阅材料，保存为 assessment.md，然后审批
+# 审批时会验证 source_table/source_field 是否与探查报告一致
 antline requirement approve REQ-20260508-001
 
-# If validation fails (e.g. table/field doesn't exist in explore report),
-# fix assessment.md or use --force to bypass
+# 若验证失败（如表/字段在探查报告中不存在），
+# 修复 assessment.md 或使用 --force 跳过
 antline requirement approve REQ-20260508-001 --force
 ```
 
-**Design note:** `assess` supports two modes:
+**设计说明：** `assess` 支持两种模式：
 
-| Mode | Flag | Output | Best for |
-|------|------|--------|----------|
-| Auto (LLM) | `--auto` | `model_sqls` + `clean_rules` + `field_mappings` + `scope.json` | Agents / automated pipelines |
-| Manual | (default) | `prompt.md` + `guide.md` + `template.md` | Human review / external LLM |
+| 模式 | 标志 | 输出 | 适用场景 |
+|------|------|------|----------|
+| 自动（LLM） | `--auto` | `model_sqls` + `clean_rules` + `field_mappings` + `scope.json` | Agent / 自动化流水线 |
+| 人工 | （默认） | `prompt.md` + `guide.md` + `template.md` | 人工审核 / 外部 LLM |
 
-| File | Purpose |
-|------|---------|
-| `prompt.md` | LLM prompt with target schema + source metadata |
-| `guide.md` | Human-readable assessment guide |
-| `template.md` | Empty Markdown template with YAML frontmatter |
+| 文件 | 用途 |
+|------|------|
+| `prompt.md` | 包含目标标准 + 源元数据的 LLM 提示词 |
+| `guide.md` | 可读性评估指南 |
+| `template.md` | 带 YAML 前置 matter 的空白 Markdown 模板 |
 
-Copy the prompt to an LLM, review the output, save it as `assessment.md`,
-then run `approve` to store the assessment in the requirement.
+将 prompt 复制给 LLM，审阅输出，保存为 `assessment.md`，
+然后运行 `approve` 将评估结果存入需求。
 
-**Auto-assessment 5-step pipeline** (`--auto`):
+**自动评估 5 步流水线**（`--auto`）：
 
 ```
-Step 0: Context Preparation    → Summarise explore reports into LLM-friendly text
-Step 1: Table Scope Analysis   → Which source tables feed each target table (with JOIN relations)
-Step 2: Model SQL Generation   → Full dbt model SQL for each target table
-Step 3: Coverage Audit         → AST parse SQL, diff against target schema (deterministic, no LLM)
-Step 4: Gap-fill Search        → Find mappings for uncovered fields across ALL source tables
-Step 5: Model Merge            → Incrementally patch gaps back into the SQL
+第 0 步：上下文准备      → 将探查报告汇总为 LLM 友好文本
+第 1 步：表范围分析      → 哪些源表 feeding 每个目标表（含 JOIN 关系）
+第 2 步：模型 SQL 生成   → 每个目标表的完整 dbt 模型 SQL
+第 3 步：覆盖审计        → AST 解析 SQL，与目标标准 diff（确定性，无 LLM）
+第 4 步：缺口搜索        → 在所有源表中查找未覆盖字段的映射
+第 5 步：模型合并        → 将缺口增量修补回 SQL
 ```
 
-Benefits:
-- **Token-efficient**: Step 1 uses wide context (all tables), Steps 2-5 use narrow context (scoped tables only)
-- **High coverage**: Audit + gap-fill ensures no target field is left unmapped
-- **Model-level SQL**: Output is a complete `SELECT ... FROM ... JOIN ...` statement, not field-by-field mappings
-- **Clean rules**: Automatically generates `clean_rules` (CAST, COALESCE, TRIM, UPPER, etc.) for the clean layer
-- **Audit trail**: Produces `scope.json` + per-model `.sql` files for human review
+优势：
+- **Token 高效**：第 1 步使用宽上下文（所有表），第 2-5 步使用窄上下文（仅范围表）
+- **高覆盖率**：审计 + 缺口填补确保没有目标字段被遗漏
+- **模型级 SQL**：输出是完整的 `SELECT ... FROM ... JOIN ...` 语句，而非逐字段映射
+- **清洗规则**：自动为清洗层生成 `clean_rules`（CAST、COALESCE、TRIM、UPPER 等）
+- **审计轨迹**：产出 `scope.json` + 每模型的 `.sql` 文件供人工审阅
 
-**Approval validation:** During `approve`, Antline cross-checks every
-non-`missing` mapping against the source explore reports:
-- `source_table` must exist in the corresponding source's explore report
-- `source_field` must exist in that table's columns
+**审批验证：** 在 `approve` 过程中，Antline 会交叉检查每个
+非 `missing` 的映射与源探查报告：
+- `source_table` 必须存在于对应数据源的探查报告中
+- `source_field` 必须存在于该表的列中
 
-If validation fails, errors are printed with line numbers. Use `--force` to
-approve anyway (e.g. for planned future schema changes).
+若验证失败，将打印带行号的错误。使用 `--force` 强制通过
+（例如针对计划中的未来 schema 变更）。
 
-**Re-approval:** If a requirement is already in a project (`IN_PROJECT` status),
-you can re-approve it with `--force` and a `--note` explaining the reason:
+**重新审批：** 若需求已在项目中（`IN_PROJECT` 状态），
+可使用 `--force` 和 `--note` 说明原因进行重新审批：
 ```bash
 antline requirement approve REQ-20260508-001 --force --note "修正表名: visits -> inpatient_visits"
 ```
-The status remains `IN_PROJECT`, and the note is recorded in the assessment.
+状态保持 `IN_PROJECT`，备注记录在评估中。
 
-Assessment output:
+评估输出：
 ```
-评估材料已生成:
+评估材料已生成：
   LLM 提示词:  requirements/REQ-20260508-001/assessment/prompt.md
   人工指南:    requirements/REQ-20260508-001/assessment/guide.md
   评估模板:    requirements/REQ-20260508-001/assessment/template.md
 
-下一步操作:
+下一步操作：
   1. 将 prompt.md 的内容复制给大模型，获取评估结果
   2. 人工审核修改后，保存为 assessment.md
   3. 审批通过: antline requirement approve REQ-20260508-001
 ```
 
-### 5. Create Project and Scaffold
+### 5. 创建项目并搭建
 
 ```bash
 antline project create --name "患者数据集成项目" --requirement REQ-20260508-001
 
-# Scaffold (credentials prompted at runtime, never stored)
+# 搭建（凭据运行时提示，永不存储）
 antline project scaffold PRJ-20260508-001
 
-# Setup FDW (for fdw mode)
+# 设置 FDW（fdw 模式）
 psql -d hospital_data -f projects/PRJ-20260508-001/dbt/sql/fdw_setup.sql
 ```
 
-Generated dbt models (with `--auto`, model-level SQL):
+生成的 dbt 模型（使用 `--auto`，模型级 SQL）：
 
 ```sql
 -- projects/PRJ-20260508-001/dbt/models/map/map_patients.sql
--- Map layer: patients
--- Requirement: REQ-20260508-001
+-- 映射层: patients
+-- 需求: REQ-20260508-001
 
 SELECT
     p.patient_id AS subject_id,
@@ -461,11 +460,11 @@ LEFT JOIN {{ source('SRC-001', 'visits') }} v
     ON p.patient_id = v.patient_id
 ```
 
-Clean layer (with `clean_rules`):
+清洗层（带 `clean_rules`）：
 
 ```sql
 -- projects/PRJ-20260508-001/dbt/models/clean/clean_patients.sql
--- Clean layer: patients
+-- 清洗层: patients
 
 SELECT
     patient_id,
@@ -477,141 +476,141 @@ SELECT
 FROM {{ ref('map_patients') }}
 ```
 
-### 6. Compile, Build and Validate
+### 6. 编译、构建和验证
 
 ```bash
-# Validate SQL syntax without executing (fast, credentials prompted)
+# 不执行，仅验证 SQL 语法（快速，凭据运行时提示）
 antline project compile PRJ-20260508-001
 
-# Build with dbt (credentials prompted)
+# 使用 dbt 构建（凭据运行时提示）
 antline project build PRJ-20260508-001
 
-# Validate and deliver (credentials prompted)
+# 验证并交付（凭据运行时提示）
 antline project validate PRJ-20260508-001
 antline project deliver PRJ-20260508-001
 ```
 
-## Agent API Guide
+## Agent API 指南
 
-Antline is designed for LLM/Agent consumption. Every command supports `--json`:
+Antline 专为 LLM/Agent 消费设计。每个命令支持 `--json`：
 
 ```bash
-# List sources as JSON
+# JSON 格式列出数据源
 antline source list --json
 
-# List requirements as JSON
+# JSON 格式列出需求
 antline requirement list --json
 
-# Explore and output raw YAML
+# 探查并输出原始 YAML
 antline source explore SRC-20260508-001 --json
 ```
 
-**Agent workflow pattern:**
+**Agent 工作流模式：**
 
 ```python
-# 1. Agent initializes workspace (no credentials stored)
+# 1. Agent 初始化工作空间（不存储凭据）
 run("antline init --name X --db-type postgresql --host localhost --port 5432")
 
-# 2. Agent reads source metadata (password prompted at runtime)
+# 2. Agent 读取源元数据（密码运行时提示）
 report = yaml.safe_load(run("antline source explore SRC-20260508-001 --json"))
 
-# 3. Agent defines requirement with background + goal
+# 3. Agent 定义需求（背景 + 目标）
 run(
     "antline requirement create --name X "
     "--background '...' --goal '...'"
 )
 run("antline requirement add-schema REQ-20260508-001 schema.yaml")
 
-# 4. Agent runs auto-assessment (5-step LLM pipeline)
-#    Produces model_sqls + clean_rules + field_mappings + scope.json
+# 4. Agent 运行自动评估（5 步 LLM 流水线）
+#    产出 model_sqls + clean_rules + field_mappings + scope.json
 result = json.loads(run(
     "antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto --json"
 ))
 
-# 5. Agent reviews uncovered fields (if any) and decides whether to approve
+# 5. Agent 审阅未覆盖字段（如有）并决定是否审批
 if result["approval_recommendation"] == "auto" and not result["uncovered_fields"]:
     run("antline requirement approve REQ-20260508-001")
 else:
-    # Review low-confidence mappings or uncovered fields
+    # 审阅低置信度映射或未覆盖字段
     for f in result["uncovered_fields"]:
-        print(f"Uncovered: {f}")
-    # Agent can fix individual mappings, or use --force to approve anyway
+        print(f"未覆盖: {f}")
+    # Agent 可修复单个映射，或使用 --force 强制审批
     run("antline requirement approve REQ-20260508-001 --force")
 
-# Alternative: step-by-step for fine-grained control
-# Step 1: table scope only
+# 替代方案：分步执行以精细控制
+# 第 1 步：仅分析表范围
 run("antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto --step scope")
-# Agent reviews scope.json, then Step 2-5: generate SQL from scope
+# Agent 审阅 scope.json，然后第 2-5 步：从范围生成 SQL
 run("antline requirement assess REQ-20260508-001 SRC-20260508-001 --auto --step generate --scope-file scope.json")
 
-# 7. Create project and scaffold
+# 7. 创建项目并搭建
 run("antline project create --name X --requirements REQ-20260508-001")
 run("antline project scaffold PRJ-20260508-001 --source-mode fdw")
 
-# 8. Compile and build (credentials prompted at runtime)
+# 8. 编译和构建（凭据运行时提示）
 run("antline project compile PRJ-20260508-001")
 run("antline project build PRJ-20260508-001")
 ```
 
-## CSV Schema Format
+## CSV 标准格式
 
-Antline accepts CSV files with these columns:
+Antline 接受包含以下列的 CSV 文件：
 
-| Column | Description |
-|--------|-------------|
-| `module` | Business module name (e.g. `Hosp`, `ICU`) |
-| `table_name` | Target table name |
-| `table_comment` | Table description |
-| `field_name` | Field/column name |
-| `field_type` | Data type with optional `NOT NULL` (e.g. `INTEGER NOT NULL`) |
-| `field_comment` | Field description |
-| `example` | Example values |
+| 列名 | 说明 |
+|------|------|
+| `module` | 业务模块名（例如 `Hosp`、`ICU`） |
+| `table_name` | 目标表名 |
+| `table_comment` | 表说明 |
+| `field_name` | 字段/列名 |
+| `field_type` | 数据类型，可选 `NOT NULL`（例如 `INTEGER NOT NULL`） |
+| `field_comment` | 字段说明 |
+| `example` | 示例值 |
 
-## Development
+## 开发
 
 ```bash
-# Clone
+# 克隆
 git clone https://github.com/wangbigan/antline.git
 cd antline
 
-# Install in editable mode
+# 可编辑模式安装
 pip install -e ".[all,dev]"
 
-# Run tests
+# 运行测试
 pytest tests/ -v
 
-# Format and lint
+# 格式化和检查
 ruff format antline/ tests/
 ruff check antline/ tests/
 ```
 
-## Roadmap
+## 路线图
 
-- [x] Source management (add, list, explore)
-- [x] Schema import from CSV
-- [x] Requirement management (create, assess, update)
-- [x] Project management (create, scaffold)
-- [x] Per-project dbt directories (`projects/PRJ-xxx/dbt/`)
-- [x] Workspace-level platform configuration
-- [x] Date-based entity IDs (SRC/REQ/PRJ-YYYYMMDD-NNN)
-- [x] Subdirectory structure for sources/requirements/projects
-- [x] Interactive scaffold with database setup prompts
-- [x] FDW / sync dual source modes for row layer
-- [x] SQL compile command (validate without executing)
-- [x] dbt integration (build, validate)
-- [x] Connection validation for source add
-- [x] PII-aware data masking in explore reports
-- [x] Dual-format reports (YAML for agents + Markdown for humans)
-- [x] No credential storage — all passwords prompted at runtime
-- [x] Audit logging for compliance
-- [x] Approval validation against explore reports
-- [x] Re-approval for IN_PROJECT requirements with notes
-- [x] Extract job (physical data sync for sync mode)
-- [x] **Intelligent requirement assessment** (`--auto`): LLM-driven 5-step pipeline (scope → SQL → audit → gap-fill → merge), produces model-level SQL + clean rules directly
-- [ ] Schedule command (cron wrapper / Airflow DAG generation)
-- [ ] Plugin system for custom ETL backends
-- [ ] Web UI (lightweight)
+- [x] 数据源管理（添加、列出、探查）
+- [x] 从 CSV 导入标准
+- [x] 需求管理（创建、评估、更新）
+- [x] 项目管理（创建、搭建）
+- [x] 项目级 dbt 目录（`projects/PRJ-xxx/dbt/`）
+- [x] 工作空间级平台配置
+- [x] 基于日期的实体 ID（SRC/REQ/PRJ-YYYYMMDD-NNN）
+- [x] 数据源/需求/项目的子目录结构
+- [x] 交互式搭建，数据库设置提示
+- [x] FDW / sync 双源模式用于行层
+- [x] SQL 编译命令（不执行验证）
+- [x] dbt 集成（构建、验证）
+- [x] 添加数据源时连接验证
+- [x] 探查报告中的 PII 感知数据脱敏
+- [x] 双格式报告（面向 Agent 的 YAML + 面向人的 Markdown）
+- [x] 不存储凭据 —— 所有密码运行时提示
+- [x] 合规审计日志
+- [x] 审批时验证与探查报告的一致性
+- [x] 为 IN_PROJECT 需求提供带备注的重新审批
+- [x] 抽取作业（sync 模式的物理数据同步）
+- [x] **智能需求评估**（`--auto`）：LLM 驱动的 5 步流水线（范围 → SQL → 审计 → 缺口填补 → 合并），直接产出模型级 SQL + 清洗规则
+- [ ] Schedule 命令（cron 包装 / Airflow DAG 生成）
+- [ ] 自定义 ETL 后端插件系统
+- [ ] Web UI（轻量）
 
-## License
+## 许可
 
 Apache-2.0
