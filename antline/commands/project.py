@@ -13,6 +13,7 @@ import typer
 import yaml
 from rich.console import Console
 from rich.table import Table
+from sqlalchemy.engine import Engine
 
 from antline.core.audit import log_operation
 from antline.core.config import ProjectState
@@ -1531,21 +1532,113 @@ def _clean_to_prod_name(clean_table: str) -> str:
     return clean_table
 
 
+def _stream_deliver_table(
+    source_engine: Engine,
+    target_engine: Engine,
+    clean_schema: str,
+    clean_table: str,
+    prod_schema: str,
+    prod_table: str,
+    batch_size: int,
+) -> dict[str, Any]:
+    """Stream-copy a single table from source to target across databases.
+
+    Uses SQLAlchemy reflection + batch INSERT for cross-database delivery.
+    """
+    from sqlalchemy import Column, Inspector, MetaData, Table, inspect
+
+    source_inspector: Inspector = inspect(source_engine)
+
+    # Get source table columns
+    try:
+        columns_info = source_inspector.get_columns(clean_table, schema=clean_schema)
+    except Exception as exc:
+        return {
+            "success": False,
+            "rows": 0,
+            "message": f"Cannot inspect source table: {exc}",
+        }
+
+    if not columns_info:
+        return {
+            "success": False,
+            "rows": 0,
+            "message": f"Table '{clean_schema}.{clean_table}' has no columns",
+        }
+
+    # Build target table (all columns nullable for safety)
+    target_metadata = MetaData(schema=prod_schema)
+    cols: list[Column] = []
+    for col_info in columns_info:
+        col = Column(
+            col_info["name"],
+            col_info["type"],
+            nullable=True,
+        )
+        cols.append(col)
+
+    target_tbl = Table(prod_table, target_metadata, *cols)
+
+    try:
+        target_tbl.drop(target_engine, checkfirst=True)
+        target_tbl.create(target_engine)
+    except Exception as exc:
+        return {
+            "success": False,
+            "rows": 0,
+            "message": f"Cannot create target table: {exc}",
+        }
+
+    # Build source table for querying
+    source_metadata = MetaData(schema=clean_schema)
+    try:
+        source_tbl = Table(clean_table, source_metadata, autoload_with=source_engine)
+    except Exception as exc:
+        return {
+            "success": False,
+            "rows": 0,
+            "message": f"Cannot build source table: {exc}",
+        }
+
+    # Copy data
+    try:
+        from antline.core.extract import _copy_data
+
+        rows = _copy_data(
+            source_engine, target_engine, source_tbl, target_tbl, batch_size
+        )
+    except Exception as exc:
+        return {
+            "success": False,
+            "rows": 0,
+            "message": f"Data copy failed: {exc}",
+        }
+
+    return {
+        "success": True,
+        "rows": rows,
+        "message": f"{rows:,} rows",
+    }
+
+
 def _deliver_table(
-    engine: Any,
+    source_engine: Engine,
+    target_engine: Engine,
     clean_schema: str,
     clean_table: str,
     prod_schema: str,
     prod_table: str,
     strategy: str,
     dry_run: bool,
+    batch_size: int,
 ) -> dict[str, Any]:
     """Deliver a single table from clean to prod layer.
 
+    If source and target are the same database, uses atomic/replace strategy.
+    If different databases, uses stream_copy strategy.
+
     Returns a dict with success, rows, message.
     """
-    from sqlalchemy import text
-
     result: dict[str, Any] = {
         "clean_table": clean_table,
         "prod_table": prod_table,
@@ -1556,16 +1649,40 @@ def _deliver_table(
 
     if dry_run:
         result["message"] = (
-            f"{clean_schema}.{clean_table} -> {prod_schema}.{prod_table} ({strategy})"
+            f"{clean_schema}.{clean_table} -> {prod_schema}.{prod_table}"
         )
         result["success"] = True
         return result
+
+    # Check if same database (same host, port, database)
+    source_url = source_engine.url
+    target_url = target_engine.url
+
+    same_db = (
+        str(source_url.host) == str(target_url.host)
+        and source_url.port == target_url.port
+        and str(source_url.database) == str(target_url.database)
+    )
+
+    if not same_db:
+        return _stream_deliver_table(
+            source_engine=source_engine,
+            target_engine=target_engine,
+            clean_schema=clean_schema,
+            clean_table=clean_table,
+            prod_schema=prod_schema,
+            prod_table=prod_table,
+            batch_size=batch_size,
+        )
+
+    # Same database: use atomic/replace
+    from sqlalchemy import text
 
     try:
         if strategy == "atomic":
             # Two-phase rename for zero-downtime delivery
             # Step 1: Create a temporary new table
-            with engine.connect() as conn:
+            with target_engine.connect() as conn:
                 conn.execute(
                     text(
                         f'DROP TABLE IF EXISTS "{prod_schema}"."{prod_table}_new"'
@@ -1580,7 +1697,7 @@ def _deliver_table(
                 conn.commit()
 
             # Step 2: Atomic rename (old -> backup, new -> prod)
-            with engine.begin() as conn:
+            with target_engine.begin() as conn:
                 conn.execute(
                     text(
                         f'ALTER TABLE IF EXISTS "{prod_schema}"."{prod_table}" '
@@ -1595,7 +1712,7 @@ def _deliver_table(
                 )
 
             # Step 3: Clean up the backup table
-            with engine.connect() as conn:
+            with target_engine.connect() as conn:
                 conn.execute(
                     text(
                         f'DROP TABLE IF EXISTS "{prod_schema}"."{prod_table}_backup"'
@@ -1605,7 +1722,7 @@ def _deliver_table(
 
         elif strategy == "replace":
             # Simple DROP + CREATE (brief downtime)
-            with engine.begin() as conn:
+            with target_engine.begin() as conn:
                 conn.execute(
                     text(
                         f'DROP TABLE IF EXISTS "{prod_schema}"."{prod_table}"'
@@ -1622,7 +1739,7 @@ def _deliver_table(
             return result
 
         # Count rows in prod table
-        with engine.connect() as conn:
+        with target_engine.connect() as conn:
             row_result = conn.execute(
                 text(
                     f'SELECT COUNT(*) FROM "{prod_schema}"."{prod_table}"'
@@ -1648,16 +1765,16 @@ def _deliver_table(
 def deliver(
     prj_id: str = typer.Argument(..., help="Project ID"),
     user: str = typer.Option(
-        "", "--user", "-u", help="Database user (defaults to workspace platform user)"
+        "", "--user", "-u", help="Source database user (defaults to workspace platform user)"
     ),
     password: str = typer.Option(
-        "", "--password", help="Database password (prompted if not provided)"
+        "", "--password", help="Source database password (prompted if not provided)"
     ),
     strategy: str = typer.Option(
         "atomic",
         "--strategy",
         "-s",
-        help="交付策略: atomic (原子重命名, 零停机) / replace (直接替换)",
+        help="交付策略: atomic (原子重命名, 零停机) / replace (直接替换). 仅对同库交付有效",
     ),
     clean_schema: str = typer.Option(
         "clean", "--clean-schema", help="Clean layer schema name"
@@ -1671,19 +1788,45 @@ def deliver(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="仅预览交付操作, 不实际执行"
     ),
+    target_host: str = typer.Option(
+        "", "--target-host", "-H", help="目标数据库主机 (默认与源相同)"
+    ),
+    target_port: int = typer.Option(
+        0, "--target-port", "-P", help="目标数据库端口 (默认与源相同)"
+    ),
+    target_database: str = typer.Option(
+        "", "--target-db", "-D", help="目标数据库名 (默认与源相同)"
+    ),
+    target_user: str = typer.Option(
+        "", "--target-user", "-U", help="目标数据库用户 (默认与源相同)"
+    ),
+    target_password: str = typer.Option(
+        "", "--target-password", help="目标数据库密码 (默认与源相同)"
+    ),
+    batch_size: int = typer.Option(
+        10000, "--batch-size", "-b", help="流式复制批次大小 (仅跨库交付时使用)"
+    ),
 ) -> None:
     """将 clean 层数据交付到 prod 生产环境.
 
-    支持两种策略:
-    - atomic (默认): 两阶段原子重命名, 零停机交付
-    - replace: 直接 DROP + CREATE, 简单但有短暂停机
+    支持同库交付和跨库交付两种模式:
+    - 同库 (默认): 使用 atomic/replace 策略, 在同一个数据库内从 clean schema 复制到 prod schema
+    - 跨库: 自动检测源和目标是否同一数据库, 跨库时使用流式复制 (支持跨实例、跨类型)
 
     要求项目已通过 QC (QC_PASSED) 或已交付过 (DELIVERED, 重新交付).
 
     示例:
+        # 同库交付 (原子重命名, 零停机)
         antline project deliver PRJ-001 --user postgres --password '***'
-        antline project deliver PRJ-001 --strategy replace --dry-run
-        antline project deliver PRJ-001 --tables patients,admissions
+
+        # 交付到指定数据库 (跨库)
+        antline project deliver PRJ-001 --target-db prod_db --target-user admin
+
+        # 交付到不同主机 (跨实例)
+        antline project deliver PRJ-001 --target-host prod.db.local --target-db analytics
+
+        # 预览交付操作
+        antline project deliver PRJ-001 --dry-run
     """
     state = ProjectState()
     prj = state.get_project(prj_id)
@@ -1707,28 +1850,22 @@ def deliver(
         raise typer.Exit(1)
 
     db_type = platform.get("db_type", "postgresql")
-    if db_type != "postgresql":
-        console.print(
-            f"[red]Deliver requires PostgreSQL target, got {db_type}[/]"
-        )
-        raise typer.Exit(1)
-
     host = platform.get("host", "localhost")
     port = platform.get("port", 5432)
     db_name = platform.get("database", "")
-    target_db = db_name or prj_id.replace("-", "_").lower()
+    source_db = db_name or prj_id.replace("-", "_").lower()
     platform_user = platform.get("user", "")
 
-    # Resolve credentials
-    resolved_user = user or platform_user
-    if not resolved_user:
-        resolved_user = typer.prompt("Database user")
+    # Resolve source credentials
+    resolved_source_user = user or platform_user
+    if not resolved_source_user:
+        resolved_source_user = typer.prompt("Source database user")
     if not password:
-        password = typer.prompt("Database password", hide_input=True)
+        password = typer.prompt("Source database password", hide_input=True)
 
-    # Validate connection
+    # Validate source connection
     console.print(
-        f"[dim]Checking target connection ({resolved_user}@{host}:{port}/{target_db}) …[/]",
+        f"[dim]Checking source connection ({resolved_source_user}@{host}:{port}/{source_db}) …[/]",
         end=" ",
     )
     try:
@@ -1736,32 +1873,100 @@ def deliver(
             db_type=db_type,
             host=host,
             port=port,
-            user=resolved_user,
+            user=resolved_source_user,
             password=password,
-            db_name=target_db,
+            db_name=source_db,
         )
         console.print("[green]ok[/]")
     except ConnectionError as exc:
         console.print(f"[red]{exc}[/]")
         raise typer.Exit(1) from None
 
-    # Connect to target database
+    # Build source engine
     from sqlalchemy import create_engine
 
-    target_conn = (
-        f"postgresql+psycopg2://{resolved_user}:{password}"
-        f"@{host}:{port}/{target_db}"
+    source_conn = (
+        f"postgresql+psycopg2://{resolved_source_user}:{password}"
+        f"@{host}:{port}/{source_db}"
     )
-    engine = create_engine(
-        target_conn,
+    source_engine = create_engine(
+        source_conn,
         pool_pre_ping=True,
         connect_args={"connect_timeout": 10, "gssencmode": "disable"},
     )
 
-    # Check clean schema exists
+    # Resolve target connection params
+    resolved_target_host = target_host or host
+    resolved_target_port = target_port or port
+    resolved_target_db = target_database or source_db
+    resolved_target_user = target_user or resolved_source_user
+    resolved_target_password = target_password or password
+
+    # Build target engine
+    if (
+        resolved_target_host == host
+        and resolved_target_port == port
+        and resolved_target_db == source_db
+    ):
+        target_engine = source_engine
+    else:
+        # Need a separate target connection
+        if not target_password and not target_user:
+            # Target credentials same as source, no need to prompt
+            pass
+        elif not resolved_target_password:
+            resolved_target_password = typer.prompt(
+                f"Target database password ({resolved_target_user}@{resolved_target_host}:{resolved_target_port})",
+                hide_input=True,
+            )
+
+        console.print(
+            f"[dim]Checking target connection ({resolved_target_user}@{resolved_target_host}:{resolved_target_port}/{resolved_target_db}) …[/]",
+            end=" ",
+        )
+        try:
+            _validate_db_credentials(
+                db_type=db_type,
+                host=resolved_target_host,
+                port=resolved_target_port,
+                user=resolved_target_user,
+                password=resolved_target_password,
+                db_name=resolved_target_db,
+            )
+            console.print("[green]ok[/]")
+        except ConnectionError as exc:
+            console.print(f"[red]{exc}[/]")
+            raise typer.Exit(1) from None
+
+        target_conn = (
+            f"postgresql+psycopg2://{resolved_target_user}:{resolved_target_password}"
+            f"@{resolved_target_host}:{resolved_target_port}/{resolved_target_db}"
+        )
+        target_engine = create_engine(
+            target_conn,
+            pool_pre_ping=True,
+            connect_args={"connect_timeout": 10, "gssencmode": "disable"},
+        )
+
+    # Check if cross-database delivery
+    source_url = source_engine.url
+    target_url = target_engine.url
+    is_cross_db = not (
+        str(source_url.host) == str(target_url.host)
+        and source_url.port == target_url.port
+        and str(source_url.database) == str(target_url.database)
+    )
+
+    if is_cross_db:
+        console.print(
+            f"  [dim]Cross-database delivery: {source_url.host}:{source_url.port}/{source_url.database} -> "
+            f"{target_url.host}:{target_url.port}/{target_url.database}[/]"
+        )
+
+    # Check clean schema exists (on source engine)
     from sqlalchemy import text
 
-    with engine.connect() as conn:
+    with source_engine.connect() as conn:
         result = conn.execute(
             text(
                 "SELECT schema_name FROM information_schema.schemata "
@@ -1776,8 +1981,8 @@ def deliver(
             )
             raise typer.Exit(1)
 
-    # Create prod schema if not exists
-    with engine.begin() as conn:
+    # Create prod schema if not exists (on target engine)
+    with target_engine.begin() as conn:
         conn.execute(
             text(f'CREATE SCHEMA IF NOT EXISTS "{prod_schema}"')
         )
@@ -1786,7 +1991,7 @@ def deliver(
     if tables:
         clean_tables = [t.strip() for t in tables.split(",") if t.strip()]
     else:
-        clean_tables = _discover_tables(engine, clean_schema)
+        clean_tables = _discover_tables(source_engine, clean_schema)
 
     if not clean_tables:
         console.print(
@@ -1795,23 +2000,32 @@ def deliver(
         raise typer.Exit(0)
 
     if dry_run:
+        mode = "跨库流式复制" if is_cross_db else strategy
         console.print(
-            f"\n[bold]DRY-RUN[/] 交付预览 ({strategy} 策略):"
+            f"\n[bold]DRY-RUN[/] 交付预览 ({mode}):"
         )
         console.print(
-            f"  {clean_schema} -> {prod_schema} | {len(clean_tables)} table(s)"
+            f"  Source: {source_url.host}:{source_url.port}/{source_url.database}.{clean_schema}"
         )
+        console.print(
+            f"  Target: {target_url.host}:{target_url.port}/{target_url.database}.{prod_schema}"
+        )
+        console.print(f"  Tables: {len(clean_tables)}")
         for ct in clean_tables:
             pt = _clean_to_prod_name(ct)
             console.print(f"    {ct} -> {pt}")
         raise typer.Exit(0)
 
     # Execute delivery
+    mode_label = "跨库流式复制" if is_cross_db else strategy
     console.print(
-        f"\n[bold]Delivering[/] {prj_id} ({strategy} 策略) …"
+        f"\n[bold]Delivering[/] {prj_id} ({mode_label}) …"
     )
     console.print(
-        f"  {clean_schema} -> {prod_schema} | {len(clean_tables)} table(s)"
+        f"  Source: {source_url.host}:{source_url.port}/{source_url.database}.{clean_schema}"
+    )
+    console.print(
+        f"  Target: {target_url.host}:{target_url.port}/{target_url.database}.{prod_schema}"
     )
 
     total_rows = 0
@@ -1822,13 +2036,15 @@ def deliver(
     for ct in clean_tables:
         pt = _clean_to_prod_name(ct)
         r = _deliver_table(
-            engine=engine,
+            source_engine=source_engine,
+            target_engine=target_engine,
             clean_schema=clean_schema,
             clean_table=ct,
             prod_schema=prod_schema,
             prod_table=pt,
             strategy=strategy,
             dry_run=False,
+            batch_size=batch_size,
         )
 
         icon = "[green]✓[/]" if r["success"] else "[red]✗[/]"
@@ -1853,6 +2069,11 @@ def deliver(
         f"Delivered at {timestamp} | strategy={strategy} | "
         f"tables={success_count} | rows={total_rows:,}"
     )
+    if is_cross_db:
+        delivery_note += (
+            f" | cross-db: {source_url.host}:{source_url.port}/{source_url.database} -> "
+            f"{target_url.host}:{target_url.port}/{target_url.database}"
+        )
 
     # Find the latest passed version and update its notes
     latest_passed: ProjectVersion | None = None
@@ -1882,11 +2103,14 @@ def deliver(
     log_operation(
         state.root,
         "project_deliver",
-        resolved_user,
-        f"{host}:{port}/{target_db}",
+        resolved_target_user,
+        f"{resolved_target_host}:{resolved_target_port}/{resolved_target_db}",
         {
             "project_id": prj_id,
             "strategy": strategy,
+            "cross_db": is_cross_db,
+            "source": f"{host}:{port}/{source_db}",
+            "target": f"{resolved_target_host}:{resolved_target_port}/{resolved_target_db}",
             "clean_schema": clean_schema,
             "prod_schema": prod_schema,
             "tables": delivered_tables,
