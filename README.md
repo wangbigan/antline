@@ -84,7 +84,7 @@ antline project build PRJ-20260508-001
 
 # 验证并交付（凭据运行时提示）
 antline project validate PRJ-20260508-001
-antline project deliver PRJ-20260508-001
+antline project deliver PRJ-20260508-001 --user postgres --password '***'
 ```
 
 ## 安装
@@ -232,7 +232,7 @@ ID 在同一日期内顺序递增，跨日期互不干扰。
 | `antline project compile PRJ-xxx [-m MODEL] [--user U] [--password PWD]` | 不执行，仅验证 SQL 语法 |
 | `antline project build PRJ-xxx [--user U] [--password PWD]` | 使用 dbt 构建 |
 | `antline project validate PRJ-xxx [--user U] [--password PWD]` | 运行数据质量测试 |
-| `antline project deliver PRJ-xxx` | 标记为生产就绪 |
+| `antline project deliver PRJ-xxx [--user U] [--password PWD] [--strategy {atomic\|replace}] [--clean-schema SCHEMA] [--prod-schema SCHEMA] [--tables TBL,TBL] [--dry-run]` | 将 clean 层数据交付到 prod schema。atomic: 零停机重命名; replace: 直接替换 |
 
 ## 脚手架：行层数据源模式
 
@@ -498,7 +498,15 @@ antline project build PRJ-20260508-001
 
 # 验证并交付（凭据运行时提示）
 antline project validate PRJ-20260508-001
-antline project deliver PRJ-20260508-001
+
+# 原子交付: clean 层 → prod 层 (零停机, 凭据运行时提示)
+antline project deliver PRJ-20260508-001 --user postgres --password '***'
+
+# 预览交付 (dry-run)
+antline project deliver PRJ-20260508-001 --dry-run
+
+# 仅交付指定表
+antline project deliver PRJ-20260508-001 --tables patients,admissions
 ```
 
 ## Agent API 指南
@@ -608,7 +616,8 @@ ruff check antline/ tests/
 - [x] 交互式搭建，数据库设置提示
 - [x] FDW / sync 双源模式用于行层
 - [x] SQL 编译命令（不执行验证）
-- [x] dbt 集成（构建、验证）
+- [x] dbt 集成（构建、验证、交付）
+- [x] **原子数据交付**（`project deliver`）：将 clean 层数据零停机交付到 prod 层，支持 atomic 重命名和 replace 两种策略，支持 dry-run 预览
 - [x] 添加数据源时连接验证
 - [x] 探查报告中的 PII 感知数据脱敏
 - [x] 双格式报告（面向 Agent 的 YAML + 面向人的 Markdown）

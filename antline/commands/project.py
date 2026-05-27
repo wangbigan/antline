@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -123,7 +124,7 @@ def _collect_scaffold_data(
                         used_tables[sid].add(table_name)
 
     # Convert sets to sorted lists
-    return {sid: sorted(list(tables)) for sid, tables in used_tables.items()}, dict(req_mappings)
+    return {sid: sorted(tables) for sid, tables in used_tables.items()}, dict(req_mappings)
 
 
 def _ensure_target_database(
@@ -333,11 +334,7 @@ def _generate_sources_yml(
 
             # Resolve schema
             if src.db_type.value == "postgresql":
-                if source_mode == "fdw":
-                    # FDW: local schema name = source database name (matches fdw_setup.sql)
-                    schema = src.database
-                else:  # sync
-                    schema = f"ods_{sid.lower()}"
+                schema = src.database if source_mode == "fdw" else f"ods_{sid.lower()}"
             else:
                 # MySQL/TiDB: database == schema
                 schema = src.database
@@ -850,7 +847,7 @@ def _validate_db_credentials(
     try:
         sock = socket.create_connection((host, port), timeout=3)
         sock.close()
-    except socket.timeout:
+    except TimeoutError:
         raise ConnectionError(
             f"Could not connect to {db_type} at {host}:{port}: TCP timeout"
         ) from None
@@ -1503,28 +1500,412 @@ def validate(
         raise typer.Exit(result.returncode)
 
 
+# ---------------------------------------------------------------------------
+# Deliver helpers
+# ---------------------------------------------------------------------------
+
+
+def _discover_tables(engine: Any, schema: str) -> list[str]:
+    """Discover all base tables in a schema."""
+    from sqlalchemy import text
+
+    sql = """
+    SELECT table_name FROM information_schema.tables
+    WHERE table_schema = :schema AND table_type = 'BASE TABLE'
+    ORDER BY table_name
+    """
+    with engine.connect() as conn:
+        result = conn.execute(text(sql), {"schema": schema})
+        return [row[0] for row in result.fetchall()]
+
+
+def _clean_to_prod_name(clean_table: str) -> str:
+    """Map clean layer table name to prod table name.
+
+    If the table name starts with 'clean_', remove the prefix.
+    Otherwise use the original name.
+    """
+    prefix = "clean_"
+    if clean_table.lower().startswith(prefix):
+        return clean_table[len(prefix) :]
+    return clean_table
+
+
+def _deliver_table(
+    engine: Any,
+    clean_schema: str,
+    clean_table: str,
+    prod_schema: str,
+    prod_table: str,
+    strategy: str,
+    dry_run: bool,
+) -> dict[str, Any]:
+    """Deliver a single table from clean to prod layer.
+
+    Returns a dict with success, rows, message.
+    """
+    from sqlalchemy import text
+
+    result: dict[str, Any] = {
+        "clean_table": clean_table,
+        "prod_table": prod_table,
+        "success": False,
+        "rows": 0,
+        "message": "",
+    }
+
+    if dry_run:
+        result["message"] = (
+            f"{clean_schema}.{clean_table} -> {prod_schema}.{prod_table} ({strategy})"
+        )
+        result["success"] = True
+        return result
+
+    try:
+        if strategy == "atomic":
+            # Two-phase rename for zero-downtime delivery
+            # Step 1: Create a temporary new table
+            with engine.connect() as conn:
+                conn.execute(
+                    text(
+                        f'DROP TABLE IF EXISTS "{prod_schema}"."{prod_table}_new"'
+                    )
+                )
+                conn.execute(
+                    text(
+                        f'CREATE TABLE "{prod_schema}"."{prod_table}_new" '
+                        f'AS SELECT * FROM "{clean_schema}"."{clean_table}"'
+                    )
+                )
+                conn.commit()
+
+            # Step 2: Atomic rename (old -> backup, new -> prod)
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        f'ALTER TABLE IF EXISTS "{prod_schema}"."{prod_table}" '
+                        f'RENAME TO "{prod_table}_backup"'
+                    )
+                )
+                conn.execute(
+                    text(
+                        f'ALTER TABLE "{prod_schema}"."{prod_table}_new" '
+                        f'RENAME TO "{prod_table}"'
+                    )
+                )
+
+            # Step 3: Clean up the backup table
+            with engine.connect() as conn:
+                conn.execute(
+                    text(
+                        f'DROP TABLE IF EXISTS "{prod_schema}"."{prod_table}_backup"'
+                    )
+                )
+                conn.commit()
+
+        elif strategy == "replace":
+            # Simple DROP + CREATE (brief downtime)
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        f'DROP TABLE IF EXISTS "{prod_schema}"."{prod_table}"'
+                    )
+                )
+                conn.execute(
+                    text(
+                        f'CREATE TABLE "{prod_schema}"."{prod_table}" '
+                        f'AS SELECT * FROM "{clean_schema}"."{clean_table}"'
+                    )
+                )
+        else:
+            result["message"] = f"Unknown strategy: {strategy}"
+            return result
+
+        # Count rows in prod table
+        with engine.connect() as conn:
+            row_result = conn.execute(
+                text(
+                    f'SELECT COUNT(*) FROM "{prod_schema}"."{prod_table}"'
+                )
+            )
+            result["rows"] = row_result.scalar() or 0
+
+        result["success"] = True
+        result["message"] = f"{result['rows']:,} rows"
+
+    except Exception as exc:
+        result["message"] = str(exc)
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
+
+
 @app.command()
 def deliver(
     prj_id: str = typer.Argument(..., help="Project ID"),
+    user: str = typer.Option(
+        "", "--user", "-u", help="Database user (defaults to workspace platform user)"
+    ),
+    password: str = typer.Option(
+        "", "--password", help="Database password (prompted if not provided)"
+    ),
+    strategy: str = typer.Option(
+        "atomic",
+        "--strategy",
+        "-s",
+        help="交付策略: atomic (原子重命名, 零停机) / replace (直接替换)",
+    ),
+    clean_schema: str = typer.Option(
+        "clean", "--clean-schema", help="Clean layer schema name"
+    ),
+    prod_schema: str = typer.Option(
+        "prod", "--prod-schema", help="Production schema name"
+    ),
+    tables: str = typer.Option(
+        "", "--tables", "-t", help="指定表名,逗号分隔 (默认: clean schema 中的所有表)"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="仅预览交付操作, 不实际执行"
+    ),
 ) -> None:
-    """Deliver the project (mark as production-ready)."""
+    """将 clean 层数据交付到 prod 生产环境.
+
+    支持两种策略:
+    - atomic (默认): 两阶段原子重命名, 零停机交付
+    - replace: 直接 DROP + CREATE, 简单但有短暂停机
+
+    要求项目已通过 QC (QC_PASSED) 或已交付过 (DELIVERED, 重新交付).
+
+    示例:
+        antline project deliver PRJ-001 --user postgres --password '***'
+        antline project deliver PRJ-001 --strategy replace --dry-run
+        antline project deliver PRJ-001 --tables patients,admissions
+    """
     state = ProjectState()
     prj = state.get_project(prj_id)
     if not prj:
         console.print(f"[red]Project not found:[/] {prj_id}")
         raise typer.Exit(1)
 
-    if prj.status != ProjectStatus.QC_PASSED:
+    if prj.status not in (ProjectStatus.QC_PASSED, ProjectStatus.DELIVERED):
         console.print(
-            f"[red]Project {prj_id} has not passed QC. Current status: {prj.status.value}[/]"
+            f"[red]Project {prj_id} has not passed QC. "
+            f"Current status: {prj.status.value}[/]"
         )
         raise typer.Exit(1)
 
-    prj.status = ProjectStatus.DELIVERED
-    state.save_project(prj)
-    git_add_all(state.root)
-    git_commit(f"deliver(project): {prj_id}", state.root)
+    # Read workspace platform config
+    platform = state.workspace_platform()
+    if not platform:
+        console.print(
+            "[red]Workspace platform not configured. Run `antline init` first.[/]"
+        )
+        raise typer.Exit(1)
 
-    console.print(f"[green]Delivered:[/] {prj_id}")
-    console.print("  Status: delivered")
-    console.print("  Next: Run dbt to promote preview models to prod target")
+    db_type = platform.get("db_type", "postgresql")
+    if db_type != "postgresql":
+        console.print(
+            f"[red]Deliver requires PostgreSQL target, got {db_type}[/]"
+        )
+        raise typer.Exit(1)
+
+    host = platform.get("host", "localhost")
+    port = platform.get("port", 5432)
+    db_name = platform.get("database", "")
+    target_db = db_name or prj_id.replace("-", "_").lower()
+    platform_user = platform.get("user", "")
+
+    # Resolve credentials
+    resolved_user = user or platform_user
+    if not resolved_user:
+        resolved_user = typer.prompt("Database user")
+    if not password:
+        password = typer.prompt("Database password", hide_input=True)
+
+    # Validate connection
+    console.print(
+        f"[dim]Checking target connection ({resolved_user}@{host}:{port}/{target_db}) …[/]",
+        end=" ",
+    )
+    try:
+        _validate_db_credentials(
+            db_type=db_type,
+            host=host,
+            port=port,
+            user=resolved_user,
+            password=password,
+            db_name=target_db,
+        )
+        console.print("[green]ok[/]")
+    except ConnectionError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(1) from None
+
+    # Connect to target database
+    from sqlalchemy import create_engine
+
+    target_conn = (
+        f"postgresql+psycopg2://{resolved_user}:{password}"
+        f"@{host}:{port}/{target_db}"
+    )
+    engine = create_engine(
+        target_conn,
+        pool_pre_ping=True,
+        connect_args={"connect_timeout": 10, "gssencmode": "disable"},
+    )
+
+    # Check clean schema exists
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        result = conn.execute(
+            text(
+                "SELECT schema_name FROM information_schema.schemata "
+                "WHERE schema_name = :schema"
+            ),
+            {"schema": clean_schema},
+        )
+        if not result.fetchone():
+            console.print(
+                f"[red]Clean schema '{clean_schema}' not found. "
+                f"Run `antline project build {prj_id}` first.[/]"
+            )
+            raise typer.Exit(1)
+
+    # Create prod schema if not exists
+    with engine.begin() as conn:
+        conn.execute(
+            text(f'CREATE SCHEMA IF NOT EXISTS "{prod_schema}"')
+        )
+
+    # Determine tables to deliver
+    if tables:
+        clean_tables = [t.strip() for t in tables.split(",") if t.strip()]
+    else:
+        clean_tables = _discover_tables(engine, clean_schema)
+
+    if not clean_tables:
+        console.print(
+            f"[yellow]No tables found in schema '{clean_schema}'.[/]"
+        )
+        raise typer.Exit(0)
+
+    if dry_run:
+        console.print(
+            f"\n[bold]DRY-RUN[/] 交付预览 ({strategy} 策略):"
+        )
+        console.print(
+            f"  {clean_schema} -> {prod_schema} | {len(clean_tables)} table(s)"
+        )
+        for ct in clean_tables:
+            pt = _clean_to_prod_name(ct)
+            console.print(f"    {ct} -> {pt}")
+        raise typer.Exit(0)
+
+    # Execute delivery
+    console.print(
+        f"\n[bold]Delivering[/] {prj_id} ({strategy} 策略) …"
+    )
+    console.print(
+        f"  {clean_schema} -> {prod_schema} | {len(clean_tables)} table(s)"
+    )
+
+    total_rows = 0
+    success_count = 0
+    failed_count = 0
+    delivered_tables: list[str] = []
+
+    for ct in clean_tables:
+        pt = _clean_to_prod_name(ct)
+        r = _deliver_table(
+            engine=engine,
+            clean_schema=clean_schema,
+            clean_table=ct,
+            prod_schema=prod_schema,
+            prod_table=pt,
+            strategy=strategy,
+            dry_run=False,
+        )
+
+        icon = "[green]✓[/]" if r["success"] else "[red]✗[/]"
+        msg = f"    {ct} -> {pt}: {icon} {r['message']}"
+        console.print(msg)
+
+        if r["success"]:
+            total_rows += r["rows"]
+            success_count += 1
+            delivered_tables.append(pt)
+        else:
+            failed_count += 1
+
+    # Update project state
+    prj.status = ProjectStatus.DELIVERED
+
+    # Record delivery info in the latest passed version
+    timestamp = datetime.now(timezone(timedelta(hours=8))).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    delivery_note = (
+        f"Delivered at {timestamp} | strategy={strategy} | "
+        f"tables={success_count} | rows={total_rows:,}"
+    )
+
+    # Find the latest passed version and update its notes
+    latest_passed: ProjectVersion | None = None
+    for v in reversed(prj.versions):
+        if v.passed:
+            latest_passed = v
+            break
+
+    if latest_passed:
+        if latest_passed.notes:
+            latest_passed.notes += f"\n{delivery_note}"
+        else:
+            latest_passed.notes = delivery_note
+    else:
+        # No passed version found; create a delivery-only version
+        vid = f"v{len(prj.versions) + 1}.0.0-delivered"
+        prj.versions.append(
+            ProjectVersion(
+                id=vid,
+                notes=delivery_note,
+                passed=True,
+            )
+        )
+
+    state.save_project(prj)
+
+    log_operation(
+        state.root,
+        "project_deliver",
+        resolved_user,
+        f"{host}:{port}/{target_db}",
+        {
+            "project_id": prj_id,
+            "strategy": strategy,
+            "clean_schema": clean_schema,
+            "prod_schema": prod_schema,
+            "tables": delivered_tables,
+            "total_rows": total_rows,
+            "success": success_count,
+            "failed": failed_count,
+        },
+    )
+
+    git_add_all(state.root)
+    git_commit(f"deliver(project): {prj_id} ({success_count} tables, {total_rows:,} rows)", state.root)
+
+    console.print()
+    if failed_count == 0:
+        console.print(
+            f"[green]交付完成:[/] {success_count} table(s), {total_rows:,} rows"
+        )
+    else:
+        console.print(
+            f"[yellow]交付完成, 部分失败:[/] "
+            f"{success_count} success, {failed_count} failed, {total_rows:,} rows"
+        )
